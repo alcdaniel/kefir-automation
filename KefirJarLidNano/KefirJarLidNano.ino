@@ -1,47 +1,47 @@
 /**
- * Kefir automatico · Tapa de tarro para fermentar kefir con Arduino Nano
- * =====================================================================
+ * Automatic Kefir Jar Lid · Arduino Nano firmware
+ * ===============================================
  *
- * Temporizador de fermentacion para una tapa de tarro impresa en 3D. Cuando la
- * cuenta atras llega a cero, un microservo libera el embolo con muelle que
- * saca los granulos de kefir de la leche y despues vuelve a su posicion.
+ * Fermentation timer for a 3D-printed jar lid. When the countdown reaches
+ * zero, a micro servo releases the spring-loaded plunger that lifts the kefir
+ * grains out of the milk, then returns to its closed position.
  *
  * Hardware
- *   - Arduino Nano clasico (ATmega328P, 5 V, 16 MHz).
- *   - Pantalla OLED SSD1306 de 128x64 por I2C (direccion 0x3C o 0x3D).
- *   - Microservo de 9 g (SG90, MG90S o similar).
- *   - Tres pulsadores: arriba, abajo y seleccionar (opcionales).
+ *   - Classic Arduino Nano (ATmega328P, 5 V, 16 MHz).
+ *   - SSD1306 128x64 I2C OLED (address 0x3C or 0x3D).
+ *   - 9 g micro servo (SG90, MG90S or similar).
+ *   - Three push buttons: up, down and select (optional).
  *
- * Conexiones (ver README.md)
- *   OLED   VDD -> 5V    GND -> GND    SDA -> A4    SCK/SCL -> A5
- *   Servo  senal -> D9  +5 V -> fuente de 5 V externa (>= 1 A recomendado)
- *          GND -> GND comun con el Nano
- *   Botones: arriba -> D2, abajo -> D3, seleccionar -> D4.
- *            La otra pata de cada boton va a GND (pull-up interno).
+ * Wiring (see README.md)
+ *   OLED    VDD -> 5V    GND -> GND    SDA -> A4    SCK/SCL -> A5
+ *   Servo   signal -> D9   +5 V -> external 5 V supply (>= 1 A recommended)
+ *           GND -> ground shared with the Nano
+ *   Buttons up -> D2, down -> D3, select -> D4.
+ *           The other leg of each button goes to GND (internal pull-up).
  *
- * Bibliotecas (Gestor de bibliotecas del Arduino IDE)
- *   - SSD1306Ascii (Bill Greiman): texto en la OLED con muy poca RAM.
- *   - Servo: control del servo.
- *   Wire y EEPROM vienen incluidas con el nucleo Arduino AVR.
+ * Libraries (Arduino IDE Library Manager)
+ *   - SSD1306Ascii (Bill Greiman): text on the OLED with very little RAM.
+ *   - Servo: servo control.
+ *   Wire and EEPROM ship with the Arduino AVR core.
  *
- * Uso
- *   - Pantalla principal: PRUEBA (5 s), RAPIDA (12 h), NORMAL (24 h) y
- *     LARGA (36 h). Arriba/abajo cambian de opcion y seleccionar la inicia.
- *   - Mantener seleccionar 1,5 s en un preajuste: editar su duracion.
- *   - Mantener arriba o abajo 1,5 s: menu de opciones (tiempo manual,
- *     prueba del servo y calibracion de angulos).
- *   - Durante la fermentacion: seleccionar pausa/continua y mantenerlo
- *     1,5 s la cancela sin liberar los granulos.
- *   - Consola serie a 115200 baudios: escribe AYUDA para ver los comandos.
+ * Usage
+ *   - Home screen: TEST (5 s), QUICK (12 h), NORMAL (24 h) and LONG (36 h).
+ *     Up/down change the option and select starts it.
+ *   - Hold select for 1.5 s on a preset: edit its duration.
+ *   - Hold up or down for 1.5 s: options menu (manual time, servo test and
+ *     angle calibration).
+ *   - While fermenting: select pauses/resumes; holding it for 1.5 s cancels
+ *     without releasing the grains.
+ *   - Serial console at 115200 baud: type HELP to list the commands.
  *
- * Persistencia
- *   La configuracion y la cuenta atras se guardan en la EEPROM al iniciar,
- *   pausar, continuar o cancelar, y cada minuto durante la fermentacion. Tras
- *   un corte de corriente se reanuda desde el ultimo minuto guardado; el tiempo
- *   sin alimentacion no se descuenta, asi nunca se libera por sorpresa.
+ * Persistence
+ *   Settings and the countdown are saved to EEPROM when starting, pausing,
+ *   resuming or cancelling, and every minute while fermenting. After a power
+ *   cut the timer resumes from the last saved minute; time without power is
+ *   not counted, so the grains are never released unexpectedly.
  *
- * Los textos de la pantalla y de la consola no llevan acentos porque las
- * fuentes de la OLED y muchos monitores serie solo admiten ASCII.
+ * Screen and console texts are plain ASCII because the OLED fonts and many
+ * serial monitors only support ASCII characters.
  */
 #include <Wire.h>
 #include <SSD1306Ascii.h>
@@ -51,65 +51,65 @@
 #include <ctype.h>
 
 // ===========================================================================
-// Pines del Arduino Nano
+// Arduino Nano pins
 // ===========================================================================
-const byte PIN_SERVO = 9;          // Senal PWM del servo.
-const byte PIN_BUTTON_UP = 2;      // Pulsador "arriba" (a GND).
-const byte PIN_BUTTON_DOWN = 3;    // Pulsador "abajo" (a GND).
-const byte PIN_BUTTON_SELECT = 4;  // Pulsador "seleccionar" (a GND).
-// El bus I2C del Nano es fijo: SDA = A4 y SCL = A5.
+const byte PIN_SERVO = 9;          // Servo PWM signal.
+const byte PIN_BUTTON_UP = 2;      // "Up" button (to GND).
+const byte PIN_BUTTON_DOWN = 3;    // "Down" button (to GND).
+const byte PIN_BUTTON_SELECT = 4;  // "Select" button (to GND).
+// The Nano's I2C bus is fixed: SDA = A4 and SCL = A5.
 
 // ===========================================================================
-// Pantalla OLED
+// OLED display
 // ===========================================================================
-// Las bibliotecas de Arduino usan direcciones I2C de 7 bits. Algunos modulos
-// imprimen 0x78 o 0x7A en la serigrafia: son las formas de 8 bits de 0x3C y
-// 0x3D. El programa prueba las dos direcciones al arrancar.
+// Arduino libraries use 7-bit I2C addresses. Some modules print 0x78 or 0x7A
+// on the silkscreen: those are the 8-bit forms of 0x3C and 0x3D. Both
+// addresses are probed at start-up.
 const byte OLED_PRIMARY_ADDRESS = 0x3C;
 const byte OLED_ALTERNATIVE_ADDRESS = 0x3D;
 const byte SCREEN_WIDTH = 128;
 const byte SCREEN_HEIGHT = 64;
 
 // ===========================================================================
-// Temporizador y preajustes
+// Timer and presets
 // ===========================================================================
-const unsigned long SAVE_INTERVAL_MS = 60000UL;  // Guardado periodico en EEPROM.
-const unsigned long LONG_PRESS_MS = 1500UL;      // Duracion de una pulsacion larga.
+const unsigned long SAVE_INTERVAL_MS = 60000UL;  // Periodic EEPROM save.
+const unsigned long LONG_PRESS_MS = 1500UL;      // Long-press duration.
 const unsigned int MIN_DURATION_MINUTES = 0;
 const unsigned int MAX_DURATION_MINUTES = 72 * 60;
-const byte PRESET_COUNT = 3;                     // RAPIDA, NORMAL y LARGA.
-// Opciones de la pantalla principal: 0 = prueba de 5 s, 1..3 = preajustes.
+const byte PRESET_COUNT = 3;                     // QUICK, NORMAL and LONG.
+// Home screen options: 0 = 5-second test, 1..3 = presets.
 const byte HOME_TEST_SELECTION = 0;
 const byte HOME_FIRST_PRESET_SELECTION = 1;
 const byte HOME_OPTION_COUNT = PRESET_COUNT + 1;
 const uint16_t DEFAULT_PRESET_DURATION_MINUTES[PRESET_COUNT] = {12 * 60, 24 * 60, 36 * 60};
-const uint32_t MECHANISM_TEST_FERMENTATION_MS = 5000UL;  // Prueba rapida del ciclo completo.
-const byte SERIAL_BUFFER_SIZE = 64;              // Longitud maxima de un comando serie.
+const uint32_t MECHANISM_TEST_FERMENTATION_MS = 5000UL;  // Quick test of the full cycle.
+const byte SERIAL_BUFFER_SIZE = 64;              // Maximum serial command length.
 
 // ===========================================================================
 // EEPROM
 // ===========================================================================
-// Los "numeros magicos" identifican el formato de los datos guardados. Si no
-// coinciden (EEPROM vacia o de otro programa), se cargan los valores por
-// defecto. Cambia el valor si modificas las estructuras PersistentData o
-// PresetData para descartar datos antiguos incompatibles.
+// The "magic numbers" identify the format of the saved data. If they do not
+// match (blank EEPROM or data from another sketch), defaults are loaded.
+// Change them whenever PersistentData or PresetData change so that old,
+// incompatible data is discarded.
 const uint32_t EEPROM_MAGIC = 0x4B465232UL;  // "KFR2"
 
 SSD1306AsciiWire display;
 Servo releaseServo;
 
-// Estado del temporizador de fermentacion.
+// Fermentation timer state.
 enum RunState : byte { IDLE, RUNNING, PAUSED };
 
-// Pantallas de la interfaz. drawScreen() dibuja cada una y handleButtons()
-// decide a cual se pasa con cada pulsacion.
+// User-interface screens. drawScreen() draws each one and handleButtons()
+// decides which one comes next on every button press.
 enum Screen : byte {
   HOME, EDIT_PRESET_DURATION, ADVANCED_MENU, DURATION, SETTINGS, EDIT_HOME_ANGLE,
   EDIT_RELEASE_ANGLE, EDIT_RELEASE_TIME, RUNNING_SCREEN, PAUSED_SCREEN, DONE
 };
 
-// Configuracion y estado del temporizador guardados en la EEPROM (direccion 0).
-// EEPROM.put() solo reescribe las celdas que cambian, lo que reduce el desgaste.
+// Settings and timer state stored in EEPROM (address 0).
+// EEPROM.put() only rewrites the cells that change, which reduces wear.
 struct PersistentData {
   uint32_t magic;
   uint16_t durationMinutes;
@@ -121,7 +121,7 @@ struct PersistentData {
   byte check;
 };
 
-// Duracion de los tres preajustes, guardada justo despues de PersistentData.
+// Duration of the three presets, stored right after PersistentData.
 struct PresetData {
   uint32_t magic;
   uint16_t minutes[PRESET_COUNT];
@@ -131,10 +131,10 @@ struct PresetData {
 const uint32_t PRESET_EEPROM_MAGIC = 0x4B505233UL;  // "KPR3"
 
 // ===========================================================================
-// Estado del programa
+// Program state
 // ===========================================================================
-// Valores por defecto de la primera ejecucion; despues se leen de la EEPROM.
-// Los angulos dependen del montaje: calibralos desde el menu SERVO.
+// First-run defaults; afterwards they are read from EEPROM.
+// The angles depend on your build: calibrate them from the SERVO menu.
 uint16_t durationMinutes = DEFAULT_PRESET_DURATION_MINUTES[1];
 uint16_t presetDurationMinutes[PRESET_COUNT] = {12 * 60, 24 * 60, 36 * 60};
 byte homeAngle = 0;
@@ -142,7 +142,7 @@ byte releaseAngle = 60;
 byte releaseSeconds = 3;
 RunState runState = IDLE;
 Screen screen = HOME;
-byte homeSelection = 2;  // Prueba, rapida, normal, larga: se empieza en NORMAL.
+byte homeSelection = 2;  // Test, quick, normal, long: starts on NORMAL.
 byte advancedSelection = 0;
 byte settingsSelection = 0;
 uint32_t remainingMs = 0;
@@ -157,9 +157,9 @@ bool ignoreNextHomeSelectRelease = false;
 char serialBuffer[SERIAL_BUFFER_SIZE];
 byte serialBufferLength = 0;
 
-// SSD1306Ascii escribe directamente en la pantalla, sin bufer en RAM. Se
-// guarda el ultimo estado dibujado para redibujar solo cuando algo cambia y
-// evitar parpadeos en cada vuelta de loop().
+// SSD1306Ascii writes straight to the display without a RAM frame buffer. The
+// last drawn state is remembered so the screen is only redrawn when something
+// changes, avoiding flicker on every loop() iteration.
 Screen lastRenderedScreen = static_cast<Screen>(255);
 byte lastRenderedHomeSelection = 255;
 byte lastRenderedAdvancedSelection = 255;
@@ -172,13 +172,13 @@ bool lastRenderedReleaseInProgress = false;
 uint32_t lastRenderedTimerSecond = UINT32_MAX;
 
 // ===========================================================================
-// Pulsadores
+// Buttons
 // ===========================================================================
-// Pulsador con antirrebote de 30 ms conectado entre un pin y GND (INPUT_PULLUP:
-// LOW = pulsado). Cada llamada a update() genera, como mucho una vez:
-//   pressed()        -> el boton acaba de bajar.
-//   longPressed()    -> lleva LONG_PRESS_MS mantenido.
-//   shortReleased()  -> se ha soltado sin llegar a pulsacion larga.
+// Push button wired between a pin and GND with 30 ms debouncing (INPUT_PULLUP:
+// LOW = pressed). Each update() call reports, at most once:
+//   pressed()        -> the button has just gone down.
+//   longPressed()    -> it has been held for LONG_PRESS_MS.
+//   shortReleased()  -> it was released before becoming a long press.
 class Button {
  public:
   Button(byte pin) : pin_(pin) {}
@@ -234,9 +234,9 @@ Button buttonDown(PIN_BUTTON_DOWN);
 Button buttonSelect(PIN_BUTTON_SELECT);
 
 // ===========================================================================
-// Persistencia en EEPROM
+// EEPROM persistence
 // ===========================================================================
-// Suma de control XOR sencilla para detectar datos corruptos o incompletos.
+// Simple XOR checksum to detect corrupt or incomplete data.
 byte checksum(const PersistentData &data) {
   const byte *bytes = reinterpret_cast<const byte *>(&data);
   byte value = 0;
@@ -272,8 +272,8 @@ void savePresetData() {
   EEPROM.put(sizeof(PersistentData), data);
 }
 
-// Carga la configuracion; si los datos no son validos, guarda los valores por
-// defecto para la proxima vez.
+// Loads the settings; if the stored data is invalid, the defaults are saved
+// for next time.
 void loadPersistentData() {
   PersistentData data;
   EEPROM.get(0, data);
@@ -308,9 +308,9 @@ void loadPresetData() {
 }
 
 // ===========================================================================
-// Formato de tiempos
+// Time formatting
 // ===========================================================================
-// HH:MM:SS truncado, para la consola serie.
+// Truncated HH:MM:SS, for the serial console.
 void formatDuration(uint32_t milliseconds, char *out, byte length) {
   uint32_t seconds = milliseconds / 1000UL;
   uint16_t hours = seconds / 3600UL;
@@ -319,7 +319,7 @@ void formatDuration(uint32_t milliseconds, char *out, byte length) {
   snprintf(out, length, "%02u:%02u:%02u", hours, minutes, secs);
 }
 
-// HH:MM:SS redondeado hacia arriba, para la prueba de 5 segundos.
+// HH:MM:SS rounded up, for the 5-second test.
 void formatSecondDuration(uint32_t milliseconds, char *out, byte length) {
   const uint32_t seconds = (milliseconds + 999UL) / 1000UL;
   const uint16_t hours = seconds / 3600UL;
@@ -328,7 +328,7 @@ void formatSecondDuration(uint32_t milliseconds, char *out, byte length) {
   snprintf(out, length, "%02u:%02u:%02u", hours, minutes, secs);
 }
 
-// HH:MM redondeado hacia arriba: 23 h 59 min 59 s se sigue viendo como 24:00.
+// HH:MM rounded up: 23 h 59 min 59 s is still shown as 24:00.
 void formatMinuteDuration(uint32_t milliseconds, char *out, byte length) {
   const uint32_t totalMinutes = (milliseconds + 59999UL) / 60000UL;
   const uint16_t hours = totalMinutes / 60UL;
@@ -337,11 +337,11 @@ void formatMinuteDuration(uint32_t milliseconds, char *out, byte length) {
 }
 
 // ===========================================================================
-// Dibujo en la OLED
+// OLED drawing
 // ===========================================================================
-// Muchas OLED de 0,96" bicolor tienen una franja superior amarilla de 16 px y
-// el resto azul. Los titulos ocupan solo la franja superior y las cifras van
-// debajo; en una pantalla monocolor se ve igual de bien.
+// Many two-colour 0.96" OLEDs have a 16 px yellow band at the top and a blue
+// area below. Titles stay in the top band and the numbers go underneath; it
+// looks just as good on a single-colour display.
 void drawTitle(const __FlashStringHelper *title, byte column) {
   display.clear();
   display.setFont(Adafruit5x7);
@@ -351,7 +351,7 @@ void drawTitle(const __FlashStringHelper *title, byte column) {
   display.set1X();
 }
 
-// Flechas laterales que indican que hay mas opciones a izquierda o derecha.
+// Side arrows showing that there are more options to the left or right.
 void drawArrows(bool showLeft, bool showRight) {
   display.setFont(Adafruit5x7);
   display.set2X();
@@ -360,7 +360,7 @@ void drawArrows(bool showLeft, bool showRight) {
   display.set1X();
 }
 
-// Numero grande seguido de "H", centrado (por ejemplo "24 H").
+// Large centred number followed by "H" (for example "24 H").
 void drawBigHours(byte hours) {
   char value[4];
   snprintf(value, sizeof(value), "%u", hours);
@@ -384,7 +384,7 @@ void drawBigHours(byte hours) {
   display.set1X();
 }
 
-// Cuenta atras grande y centrada: HH:MM o, con showSeconds, HH:MM:SS.
+// Large centred countdown: HH:MM or, with showSeconds, HH:MM:SS.
 void drawBigTimer(uint32_t milliseconds, bool showSeconds = false) {
   char value[16];
   if (showSeconds) formatSecondDuration(milliseconds, value, sizeof(value));
@@ -398,7 +398,7 @@ void drawBigTimer(uint32_t milliseconds, bool showSeconds = false) {
   display.set1X();
 }
 
-// Valor numerico grande y centrado (angulos y segundos del servo).
+// Large centred value (servo angles and seconds).
 void drawBigValue(byte value) {
   char text[4];
   snprintf(text, sizeof(text), "%u", value);
@@ -411,19 +411,20 @@ void drawBigValue(byte value) {
   display.set1X();
 }
 
-// Dibuja la pantalla completa correspondiente a `screen`.
+// Draws the full screen for the current `screen`. Title columns centre the
+// text: column = (128 - 12 * characters) / 2 with the 2x font.
 void drawScreen() {
   if (!displayAvailable) return;
   switch (screen) {
     case HOME:
       if (homeSelection == HOME_TEST_SELECTION) {
-        drawTitle(F("PRUEBA"), 28);
+        drawTitle(F("TEST"), 40);
         drawBigTimer(MECHANISM_TEST_FERMENTATION_MS, true);
       } else {
         const byte presetIndex = homeSelection - HOME_FIRST_PRESET_SELECTION;
-        if (presetIndex == 0) drawTitle(F("RAPIDA"), 28);
+        if (presetIndex == 0) drawTitle(F("QUICK"), 34);
         else if (presetIndex == 1) drawTitle(F("NORMAL"), 28);
-        else drawTitle(F("LARGA"), 34);
+        else drawTitle(F("LONG"), 40);
         if (presetDurationMinutes[presetIndex] % 60 == 0) {
           drawBigHours(presetDurationMinutes[presetIndex] / 60);
         } else {
@@ -433,63 +434,63 @@ void drawScreen() {
       drawArrows(homeSelection > HOME_TEST_SELECTION, homeSelection < HOME_OPTION_COUNT - 1);
       break;
     case EDIT_PRESET_DURATION:
-      if (homeSelection == 1) drawTitle(F("RAPIDA"), 28);
+      if (homeSelection == 1) drawTitle(F("QUICK"), 34);
       else if (homeSelection == 2) drawTitle(F("NORMAL"), 28);
-      else drawTitle(F("LARGA"), 34);
+      else drawTitle(F("LONG"), 40);
       drawBigTimer(static_cast<uint32_t>(presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION]) * 60000UL);
       drawArrows(true, true);
       break;
     case ADVANCED_MENU:
-      drawTitle(F("OPCIONES"), 16);
+      drawTitle(F("OPTIONS"), 22);
       display.set2X();
-      if (advancedSelection == 0) { display.setCursor(28, 3); display.print(F("TIEMPO")); }
-      else if (advancedSelection == 1) { display.setCursor(28, 3); display.print(F("PRUEBA")); }
+      if (advancedSelection == 0) { display.setCursor(40, 3); display.print(F("TIME")); }
+      else if (advancedSelection == 1) { display.setCursor(40, 3); display.print(F("TEST")); }
       else if (advancedSelection == 2) { display.setCursor(34, 3); display.print(F("SERVO")); }
-      else { display.setCursor(34, 3); display.print(F("SALIR")); }
+      else { display.setCursor(40, 3); display.print(F("EXIT")); }
       display.set1X();
       drawArrows(true, true);
       break;
     case DURATION:
-      drawTitle(F("TIEMPO"), 28);
+      drawTitle(F("TIME"), 40);
       drawBigTimer(static_cast<uint32_t>(durationMinutes) * 60000UL);
       drawArrows(true, true);
       break;
     case SETTINGS:
       drawTitle(F("SERVO"), 34);
       display.set2X();
-      if (settingsSelection == 0) { display.setCursor(28, 3); display.print(F("CERRAR")); }
-      else if (settingsSelection == 1) { display.setCursor(34, 3); display.print(F("ABRIR")); }
-      else if (settingsSelection == 2) { display.setCursor(28, 3); display.print(F("TIEMPO")); }
-      else { display.setCursor(34, 3); display.print(F("SALIR")); }
+      if (settingsSelection == 0) { display.setCursor(28, 3); display.print(F("CLOSED")); }
+      else if (settingsSelection == 1) { display.setCursor(40, 3); display.print(F("OPEN")); }
+      else if (settingsSelection == 2) { display.setCursor(40, 3); display.print(F("HOLD")); }
+      else { display.setCursor(40, 3); display.print(F("EXIT")); }
       display.set1X();
       drawArrows(true, true);
       break;
     case EDIT_HOME_ANGLE:
     case EDIT_RELEASE_ANGLE:
     case EDIT_RELEASE_TIME:
-      if (screen == EDIT_HOME_ANGLE) { drawTitle(F("CERRADO"), 22); drawBigValue(homeAngle); }
-      else if (screen == EDIT_RELEASE_ANGLE) { drawTitle(F("ABIERTO"), 22); drawBigValue(releaseAngle); }
-      else { drawTitle(F("RETENER"), 22); drawBigValue(releaseSeconds); }
+      if (screen == EDIT_HOME_ANGLE) { drawTitle(F("CLOSED"), 28); drawBigValue(homeAngle); }
+      else if (screen == EDIT_RELEASE_ANGLE) { drawTitle(F("OPEN"), 40); drawBigValue(releaseAngle); }
+      else { drawTitle(F("HOLD S"), 28); drawBigValue(releaseSeconds); }
       drawArrows(true, true);
       break;
     case RUNNING_SCREEN:
-      if (shortTestInProgress) drawTitle(F("PRUEBA"), 28);
-      else drawTitle(F("ACTIVO"), 28);
+      if (shortTestInProgress) drawTitle(F("TEST"), 40);
+      else drawTitle(F("ACTIVE"), 28);
       drawBigTimer(remainingMs, shortTestInProgress);
       break;
     case PAUSED_SCREEN:
-      drawTitle(F("PAUSA"), 34);
+      drawTitle(F("PAUSED"), 28);
       drawBigTimer(remainingMs, shortTestInProgress);
       break;
     case DONE:
-      if (releaseInProgress) drawTitle(F("LIBERANDO"), 10);
-      else drawTitle(F("LISTO"), 34);
+      if (releaseInProgress) drawTitle(F("RELEASING"), 10);
+      else drawTitle(F("DONE"), 40);
       break;
   }
 }
 
-// Devuelve true si ha cambiado algo que obliga a redibujar la pantalla entera
-// y memoriza el estado actual como "ya dibujado".
+// Returns true when something changed that requires a full redraw, and
+// remembers the current state as "already drawn".
 bool needsFullRedraw() {
   const bool changed =
       screen != lastRenderedScreen ||
@@ -518,8 +519,8 @@ bool needsFullRedraw() {
   return changed;
 }
 
-// Durante la cuenta atras solo se actualizan las cifras, una vez por minuto
-// (o por segundo en la prueba de 5 s).
+// During the countdown only the digits are refreshed, once per minute (or once
+// per second during the 5-second test).
 void updateTimerText() {
   if (!displayAvailable || (screen != RUNNING_SCREEN && screen != PAUSED_SCREEN)) return;
   const uint32_t displayTick = shortTestInProgress
@@ -527,27 +528,27 @@ void updateTimerText() {
       : (remainingMs + 59999UL) / 60000UL;
   if (displayTick == lastRenderedTimerSecond) return;
 
-  // Solo se borra el campo numérico azul; la cabecera amarilla no parpadea.
+  // Only the numeric area is cleared, so the title band does not flicker.
   display.clear(0, SCREEN_WIDTH - 1, 2, 5);
   drawBigTimer(remainingMs, shortTestInProgress);
   lastRenderedTimerSecond = displayTick;
 }
 
 // ===========================================================================
-// Servo y ciclo de fermentacion
+// Servo and fermentation cycle
 // ===========================================================================
 void moveServoHome() { releaseServo.write(homeAngle); }
 void moveServoRelease() { releaseServo.write(releaseAngle); }
 
-// Mueve el servo a la posicion de liberacion. loop() lo devuelve a la posicion
-// cerrada cuando pasan `releaseSeconds` segundos (finishRelease()).
+// Moves the servo to the release position. loop() returns it to the closed
+// position after `releaseSeconds` seconds (finishRelease()).
 void beginRelease(bool isTest) {
   releaseIsTest = isTest;
   releaseInProgress = true;
   releaseStartedMs = millis();
   moveServoRelease();
   screen = DONE;
-  Serial.println(isTest ? F("Prueba de liberacion iniciada.") : F("Tiempo terminado: liberando granulos."));
+  Serial.println(isTest ? F("Release test started.") : F("Time is up: releasing the grains."));
 }
 
 void finishRelease() {
@@ -555,13 +556,13 @@ void finishRelease() {
   releaseInProgress = false;
   if (releaseIsTest) {
     screen = HOME;
-    Serial.println(F("Prueba terminada: servo en posicion cerrada."));
+    Serial.println(F("Test finished: servo in closed position."));
   } else {
     runState = IDLE;
     remainingMs = 0;
     savePersistentData();
     screen = DONE;
-    Serial.println(F("Fermentacion terminada: servo en posicion cerrada."));
+    Serial.println(F("Fermentation finished: servo in closed position."));
   }
 }
 
@@ -572,7 +573,7 @@ void startFermentation() {
   lastTickMs = lastSaveMs = millis();
   savePersistentData();
   screen = RUNNING_SCREEN;
-  Serial.println(F("Fermentacion iniciada."));
+  Serial.println(F("Fermentation started."));
 }
 
 void startMechanismTest() {
@@ -582,14 +583,14 @@ void startMechanismTest() {
   lastTickMs = lastSaveMs = millis();
   savePersistentData();
   screen = RUNNING_SCREEN;
-  Serial.println(F("Prueba de 5 segundos iniciada."));
+  Serial.println(F("5-second test started."));
 }
 
 void pauseFermentation() {
   runState = PAUSED;
   savePersistentData();
   screen = PAUSED_SCREEN;
-  Serial.println(F("Temporizador pausado."));
+  Serial.println(F("Timer paused."));
 }
 
 void resumeFermentation() {
@@ -597,7 +598,7 @@ void resumeFermentation() {
   lastTickMs = lastSaveMs = millis();
   savePersistentData();
   screen = RUNNING_SCREEN;
-  Serial.println(F("Temporizador reanudado."));
+  Serial.println(F("Timer resumed."));
 }
 
 void cancelFermentation() {
@@ -607,11 +608,11 @@ void cancelFermentation() {
   savePersistentData();
   moveServoHome();
   screen = HOME;
-  Serial.println(F("Fermentacion cancelada. Servo en posicion cerrada."));
+  Serial.println(F("Fermentation cancelled. Servo in closed position."));
 }
 
-// Descuenta el tiempo transcurrido desde la ultima vuelta. millis() se resta
-// sin signo, por lo que el desbordamiento cada ~49 dias no afecta.
+// Subtracts the time elapsed since the previous loop. millis() is subtracted
+// as unsigned, so its roll-over every ~49 days does no harm.
 void updateTimer(uint32_t now) {
   if (runState != RUNNING) return;
   uint32_t elapsed = now - lastTickMs;
@@ -632,9 +633,9 @@ void updateTimer(uint32_t now) {
 }
 
 // ===========================================================================
-// Consola serie (115200 baudios, comandos terminados en salto de linea)
+// Serial console (115200 baud, commands end with a newline)
 // ===========================================================================
-// Convierte `value` en un entero dentro de [minimum, maximum].
+// Parses `value` as an integer within [minimum, maximum].
 bool parseNumber(const char *value, long minimum, long maximum, long &result) {
   if (value == NULL || *value == '\0') return false;
   char *end = NULL;
@@ -646,56 +647,61 @@ bool parseNumber(const char *value, long minimum, long maximum, long &result) {
 
 void printHelp() {
   Serial.println();
-  Serial.println(F("=== KEFIR NANO: COMANDOS ==="));
-  Serial.println(F("AYUDA                    Muestra esta lista"));
-  Serial.println(F("ESTADO                   Muestra configuracion y temporizador"));
-  Serial.println(F("DURACION <h> [min]       Guarda una duracion (0 min - 72 h)"));
-  Serial.println(F("INICIAR [h] [min]        Inicia; con valores cambia la duracion"));
-  Serial.println(F("PAUSA | CONTINUAR | CANCELAR"));
-  Serial.println(F("PRUEBA                   Abre y cierra el servo una vez"));
-  Serial.println(F("CERRAR                   Lleva el servo a la posicion cerrada"));
-  Serial.println(F("CERRADO <0-180>          Ajusta el angulo cerrado"));
-  Serial.println(F("LIBERACION <0-180>       Ajusta el angulo de liberacion"));
-  Serial.println(F("RETENCION <1-10>         Ajusta los segundos de liberacion"));
-  Serial.println(F("Ejemplos: DURACION 14 | INICIAR | INICIAR 12 30"));
-  Serial.println(F("Escribe sin acentos y pulsa Enviar."));
+  Serial.println(F("=== KEFIR NANO: COMMANDS ==="));
+  Serial.println(F("HELP                     Show this list"));
+  Serial.println(F("STATUS                   Show settings and timer"));
+  Serial.println(F("DURATION <h> [min]       Save a duration (0 min - 72 h)"));
+  Serial.println(F("START [h] [min]          Start; with values, change the duration first"));
+  Serial.println(F("PAUSE | RESUME | CANCEL"));
+  Serial.println(F("TEST                     Open and close the servo once"));
+  Serial.println(F("CLOSE                    Move the servo to the closed position"));
+  Serial.println(F("CLOSED <0-180>           Set the closed angle"));
+  Serial.println(F("RELEASE <0-180>          Set the release angle"));
+  Serial.println(F("HOLD <1-10>              Set the seconds held open"));
+  Serial.println(F("Examples: DURATION 14 | START | START 12 30"));
 }
 
 void printStatus() {
   char timeText[16];
   formatDuration(remainingMs, timeText, sizeof(timeText));
-  Serial.println(F("--- ESTADO ---"));
-  Serial.print(F("Duracion configurada: ")); Serial.print(durationMinutes / 60);
+  Serial.println(F("--- STATUS ---"));
+  Serial.print(F("Configured duration: ")); Serial.print(durationMinutes / 60);
   Serial.print(F(" h ")); Serial.print(durationMinutes % 60); Serial.println(F(" min"));
-  Serial.print(F("Servo cerrado: ")); Serial.print(homeAngle);
-  Serial.print(F(" | liberar: ")); Serial.print(releaseAngle);
-  Serial.print(F(" | retencion: ")); Serial.print(releaseSeconds); Serial.println(F(" s"));
-  if (releaseInProgress) Serial.println(F("Estado: LIBERANDO GRANULOS"));
-  else if (runState == RUNNING) { Serial.print(F("Estado: FERMENTANDO | resta: ")); Serial.println(timeText); }
-  else if (runState == PAUSED) { Serial.print(F("Estado: PAUSADO | resta: ")); Serial.println(timeText); }
-  else Serial.println(F("Estado: EN ESPERA"));
+  Serial.print(F("Servo closed: ")); Serial.print(homeAngle);
+  Serial.print(F(" | release: ")); Serial.print(releaseAngle);
+  Serial.print(F(" | hold: ")); Serial.print(releaseSeconds); Serial.println(F(" s"));
+  if (releaseInProgress) Serial.println(F("State: RELEASING GRAINS"));
+  else if (runState == RUNNING) { Serial.print(F("State: FERMENTING | remaining: ")); Serial.println(timeText); }
+  else if (runState == PAUSED) { Serial.print(F("State: PAUSED | remaining: ")); Serial.println(timeText); }
+  else Serial.println(F("State: IDLE"));
 }
 
 bool setDurationFromArguments(char *hoursText, char *minutesText) {
   long hours = 0, minutes = 0;
   if (!parseNumber(hoursText, 0, 72, hours) ||
       (minutesText != NULL && !parseNumber(minutesText, 0, 59, minutes))) {
-    Serial.println(F("Uso: DURACION <horas 0-72> [minutos 0-59]"));
+    Serial.println(F("Usage: DURATION <hours 0-72> [minutes 0-59]"));
     return false;
   }
   long total = hours * 60L + minutes;
   if (total < MIN_DURATION_MINUTES || total > MAX_DURATION_MINUTES) {
-    Serial.println(F("La duracion debe estar entre 0 minutos y 72 horas."));
+    Serial.println(F("The duration must be between 0 minutes and 72 hours."));
     return false;
   }
   durationMinutes = total;
   savePersistentData();
-  Serial.print(F("Duracion guardada: ")); Serial.print(hours); Serial.print(F(" h "));
+  Serial.print(F("Duration saved: ")); Serial.print(hours); Serial.print(F(" h "));
   Serial.print(minutes); Serial.println(F(" min."));
   return true;
 }
 
-// Interpreta una linea completa: COMANDO [argumento1] [argumento2].
+// Accepts the English command or its Spanish alias, kept so that older notes
+// and videos still work.
+bool isCommand(const char *command, const char *english, const char *spanish) {
+  return !strcmp(command, english) || !strcmp(command, spanish);
+}
+
+// Runs one complete line: COMMAND [argument1] [argument2].
 void handleSerialCommand(char *line) {
   while (isspace(*line)) ++line;
   if (*line == '\0') return;
@@ -704,61 +710,61 @@ void handleSerialCommand(char *line) {
   char *arg1 = strtok(NULL, " \t");
   char *arg2 = strtok(NULL, " \t");
 
-  if (!strcmp(command, "AYUDA") || !strcmp(command, "HELP")) { printHelp(); return; }
-  if (!strcmp(command, "ESTADO")) { printStatus(); return; }
-  if (releaseInProgress) { Serial.println(F("El servo esta liberando; espera a que termine.")); return; }
-  if (!strcmp(command, "DURACION")) {
+  if (isCommand(command, "HELP", "AYUDA")) { printHelp(); return; }
+  if (isCommand(command, "STATUS", "ESTADO")) { printStatus(); return; }
+  if (releaseInProgress) { Serial.println(F("The servo is releasing; wait until it finishes.")); return; }
+  if (isCommand(command, "DURATION", "DURACION")) {
     if (runState == IDLE) setDurationFromArguments(arg1, arg2);
-    else Serial.println(F("No se puede cambiar la duracion durante una fermentacion."));
+    else Serial.println(F("The duration cannot be changed during a fermentation."));
     return;
   }
-  if (!strcmp(command, "INICIAR")) {
-    if (runState != IDLE) Serial.println(F("Ya hay una fermentacion en curso o pausada."));
+  if (isCommand(command, "START", "INICIAR")) {
+    if (runState != IDLE) Serial.println(F("A fermentation is already running or paused."));
     else if (arg1 == NULL || setDurationFromArguments(arg1, arg2)) startFermentation();
     return;
   }
-  if (!strcmp(command, "PAUSA")) {
-    if (runState == RUNNING) pauseFermentation(); else Serial.println(F("No hay una fermentacion activa que pausar."));
+  if (isCommand(command, "PAUSE", "PAUSA")) {
+    if (runState == RUNNING) pauseFermentation(); else Serial.println(F("There is no running fermentation to pause."));
     return;
   }
-  if (!strcmp(command, "CONTINUAR")) {
-    if (runState == PAUSED && remainingMs > 0) resumeFermentation(); else Serial.println(F("No hay una fermentacion pausada que continuar."));
+  if (isCommand(command, "RESUME", "CONTINUAR")) {
+    if (runState == PAUSED && remainingMs > 0) resumeFermentation(); else Serial.println(F("There is no paused fermentation to resume."));
     return;
   }
-  if (!strcmp(command, "CANCELAR")) {
-    if (runState != IDLE) cancelFermentation(); else Serial.println(F("No hay una fermentacion que cancelar."));
+  if (isCommand(command, "CANCEL", "CANCELAR")) {
+    if (runState != IDLE) cancelFermentation(); else Serial.println(F("There is no fermentation to cancel."));
     return;
   }
-  if (!strcmp(command, "PRUEBA")) {
-    if (runState == IDLE) beginRelease(true); else Serial.println(F("Cancela o termina la fermentacion antes de probar el servo."));
+  if (isCommand(command, "TEST", "PRUEBA")) {
+    if (runState == IDLE) beginRelease(true); else Serial.println(F("Cancel or finish the fermentation before testing the servo."));
     return;
   }
-  if (!strcmp(command, "CERRAR")) { moveServoHome(); Serial.println(F("Servo en posicion cerrada.")); return; }
+  if (isCommand(command, "CLOSE", "CERRAR")) { moveServoHome(); Serial.println(F("Servo in closed position.")); return; }
 
   long value = 0;
-  if (!strcmp(command, "CERRADO")) {
+  if (isCommand(command, "CLOSED", "CERRADO")) {
     if (parseNumber(arg1, 0, 180, value)) {
       homeAngle = value; savePersistentData(); moveServoHome();
-      Serial.println(F("Angulo cerrado guardado."));
-    } else Serial.println(F("Uso: CERRADO <angulo 0-180>"));
+      Serial.println(F("Closed angle saved."));
+    } else Serial.println(F("Usage: CLOSED <angle 0-180>"));
     return;
   }
-  if (!strcmp(command, "LIBERACION")) {
+  if (isCommand(command, "RELEASE", "LIBERACION")) {
     if (parseNumber(arg1, 0, 180, value)) {
-      releaseAngle = value; savePersistentData(); Serial.println(F("Angulo de liberacion guardado."));
-    } else Serial.println(F("Uso: LIBERACION <angulo 0-180>"));
+      releaseAngle = value; savePersistentData(); Serial.println(F("Release angle saved."));
+    } else Serial.println(F("Usage: RELEASE <angle 0-180>"));
     return;
   }
-  if (!strcmp(command, "RETENCION")) {
+  if (isCommand(command, "HOLD", "RETENCION")) {
     if (parseNumber(arg1, 1, 10, value)) {
-      releaseSeconds = value; savePersistentData(); Serial.println(F("Retencion guardada."));
-    } else Serial.println(F("Uso: RETENCION <segundos 1-10>"));
+      releaseSeconds = value; savePersistentData(); Serial.println(F("Hold time saved."));
+    } else Serial.println(F("Usage: HOLD <seconds 1-10>"));
     return;
   }
-  Serial.println(F("Comando no reconocido. Escribe AYUDA."));
+  Serial.println(F("Unknown command. Type HELP."));
 }
 
-// Acumula caracteres hasta recibir un salto de linea y ejecuta el comando.
+// Collects characters until a newline arrives, then runs the command.
 void readSerialCommands() {
   while (Serial.available()) {
     char received = Serial.read();
@@ -771,13 +777,13 @@ void readSerialCommands() {
       serialBuffer[serialBufferLength++] = received;
     } else {
       serialBufferLength = 0;
-      Serial.println(F("Comando demasiado largo. Escribe AYUDA."));
+      Serial.println(F("Command too long. Type HELP."));
     }
   }
 }
 
 // ===========================================================================
-// Interfaz con botones
+// Button interface
 // ===========================================================================
 void startPresetFermentation() {
   durationMinutes = presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION];
@@ -802,8 +808,8 @@ void handleButtons() {
     }
     if (buttonUp.pressed() && homeSelection > HOME_TEST_SELECTION) --homeSelection;
     if (buttonDown.pressed() && homeSelection < HOME_OPTION_COUNT - 1) ++homeSelection;
-    // En la pantalla principal un toque corto inicia al soltar; mantener
-    // seleccionar abre la edicion del preajuste sin iniciar el temporizador.
+    // On the home screen a short press starts on release; holding select
+    // opens the preset editor without starting the timer first.
     if (buttonSelect.longPressed() && homeSelection != HOME_TEST_SELECTION) screen = EDIT_PRESET_DURATION;
     else if (buttonSelect.shortReleased()) {
       if (ignoreNextHomeSelectRelease) ignoreNextHomeSelectRelease = false;
@@ -870,7 +876,7 @@ void handleButtons() {
 }
 
 // ===========================================================================
-// Arranque y bucle principal
+// Start-up and main loop
 // ===========================================================================
 bool isI2cDeviceAt(byte address) {
   Wire.beginTransmission(address);
@@ -888,24 +894,24 @@ void setup() {
   buttonUp.begin(); buttonDown.begin(); buttonSelect.begin();
   loadPersistentData();
   loadPresetData();
-  Wire.begin();                 // Nano: SDA = A4, SCL = A5 (I2C fijo).
-  Wire.setClock(100000L);       // I2C estandar a 100 kHz, el mas compatible.
+  Wire.begin();                 // Nano: SDA = A4, SCL = A5 (fixed I2C pins).
+  Wire.setClock(100000L);       // Standard 100 kHz I2C, the most compatible.
   byte oledAddress = findOledAddress();
   if (oledAddress != 0) {
     display.begin(&Adafruit128x64, oledAddress);
     display.setFont(Adafruit5x7);
     displayAvailable = true;
-    Serial.print(F("OLED encontrada en I2C 0x"));
+    Serial.print(F("OLED found at I2C 0x"));
     Serial.println(oledAddress, HEX);
   } else {
-    Serial.println(F("No se encontro OLED I2C en 0x3C ni 0x3D."));
-    Serial.println(F("Nano clasico: SDA=A4, SCL=A5, VCC=3V3/5V y GND=GND."));
-    Serial.println(F("El control por puerto serie sigue disponible."));
+    Serial.println(F("No I2C OLED found at 0x3C or 0x3D."));
+    Serial.println(F("Classic Nano: SDA=A4, SCL=A5, VCC=3V3/5V and GND=GND."));
+    Serial.println(F("Serial control is still available."));
   }
   releaseServo.attach(PIN_SERVO);
   moveServoHome();
-  // Si se corto la corriente durante una fermentacion, se continua desde el
-  // ultimo minuto guardado.
+  // If power was lost during a fermentation, resume from the last saved
+  // minute.
   if (runState == RUNNING && remainingMs > 0) {
     screen = RUNNING_SCREEN;
     lastTickMs = lastSaveMs = millis();
@@ -917,22 +923,22 @@ void setup() {
   }
   drawScreen();
   needsFullRedraw();
-  Serial.println(F("Kefir Nano listo. Puerto serie: 115200 baudios."));
+  Serial.println(F("Kefir Nano ready. Serial port: 115200 baud."));
   printHelp();
 }
 
 void loop() {
   uint32_t now = millis();
   buttonUp.update(now); buttonDown.update(now); buttonSelect.update(now);
-  // Eco de cada pulsacion por la consola: util para comprobar el cableado.
-  if (buttonUp.pressed()) Serial.println(F("Boton detectado: ARRIBA (D2)"));
-  if (buttonDown.pressed()) Serial.println(F("Boton detectado: ABAJO (D3)"));
-  if (buttonSelect.pressed()) Serial.println(F("Boton detectado: SELECCIONAR (D4)"));
+  // Echo every button press on the console: handy to check the wiring.
+  if (buttonUp.pressed()) Serial.println(F("Button pressed: UP (D2)"));
+  if (buttonDown.pressed()) Serial.println(F("Button pressed: DOWN (D3)"));
+  if (buttonSelect.pressed()) Serial.println(F("Button pressed: SELECT (D4)"));
   readSerialCommands();
   updateTimer(now);
-  // updateTimer() puede iniciar la liberacion en esta misma vuelta, asi que se
-  // vuelve a leer millis(): con `now`, que es anterior a releaseStartedMs, la
-  // resta sin signo se desbordaria y el servo se cerraria de inmediato.
+  // updateTimer() may start the release in this same iteration, so millis()
+  // is read again: `now` is older than releaseStartedMs, and the unsigned
+  // subtraction would wrap around and close the servo immediately.
   const uint32_t releaseNow = millis();
   if (releaseInProgress && releaseNow - releaseStartedMs >= static_cast<uint32_t>(releaseSeconds) * 1000UL) {
     finishRelease();

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" role="img" aria-labelledby="title desc" font-family="'IBM Plex Sans', 'Segoe UI', Arial, sans-serif">
+  <title id="title">Wiring diagram</title>
+  <desc id="desc">Arduino Nano connected to an SSD1306 OLED (VDD 5V, GND, SDA A4, SCK A5), three push buttons to D2, D3 and D4 with their other leg to GND, and a 9 g servo with signal on D9, +5 V from an external 5 V supply and GND shared with the Nano.</desc>
+  <defs>
+    <style>
+      .box { fill: #ffffff; stroke: #1f2937; stroke-width: 2; }
+      .board { fill: #0f4c5c; stroke: #0b3440; stroke-width: 2; }
+      .title { font-size: 17px; font-weight: 600; fill: #111827; }
+      .boardtitle { font-size: 18px; font-weight: 700; fill: #ffffff; }
+      .pin { font-size: 13px; font-weight: 600; fill: #111827; }
+      .boardpin { font-size: 13px; font-weight: 600; fill: #ffffff; }
+      .note { font-size: 12px; fill: #4b5563; }
+      .wire { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .v5 { stroke: #d92d20; } .gnd { stroke: #1f2937; } .sda { stroke: #2563eb; }
+      .scl { stroke: #7c3aed; } .btn { stroke: #0f9d76; } .sig { stroke: #ea580c; }
+      .dot { stroke: none; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="960" height="600" rx="18" fill="#f8fafc"/>
+
+  <!-- Arduino Nano -->
+  <rect class="board" x="360" y="110" width="220" height="410" rx="12"/>
+  <text class="boardtitle" x="470" y="140" text-anchor="middle">Arduino Nano</text>
+  <text class="boardpin" x="372" y="185">5V</text>
+  <text class="boardpin" x="372" y="225">GND</text>
+  <text class="boardpin" x="372" y="265">A4 · SDA</text>
+  <text class="boardpin" x="372" y="305">A5 · SCL</text>
+  <text class="boardpin" x="372" y="385">D2</text>
+  <text class="boardpin" x="372" y="445">D3</text>
+  <text class="boardpin" x="372" y="505">D4</text>
+  <text class="boardpin" x="568" y="245" text-anchor="end">D9</text>
+  <text class="boardpin" x="568" y="325" text-anchor="end">GND</text>
+
+  <!-- OLED -->
+  <rect class="box" x="40" y="130" width="220" height="212" rx="10"/>
+  <text class="title" x="150" y="158" text-anchor="middle">OLED SSD1306</text>
+  <text class="note" x="150" y="333" text-anchor="middle">128×64 · I2C (0x3C / 0x3D)</text>
+  <text class="pin" x="248" y="185" text-anchor="end">VDD</text>
+  <text class="pin" x="248" y="225" text-anchor="end">GND</text>
+  <text class="pin" x="248" y="265" text-anchor="end">SDA</text>
+  <text class="pin" x="248" y="305" text-anchor="end">SCK</text>
+  <path class="wire v5" d="M260 180 H360"/>
+  <path class="wire gnd" d="M260 220 H360"/>
+  <path class="wire sda" d="M260 260 H360"/>
+  <path class="wire scl" d="M260 300 H360"/>
+
+  <!-- Buttons -->
+  <g>
+    <rect class="box" x="120" y="355" width="140" height="44" rx="8"/>
+    <text class="pin" x="190" y="382" text-anchor="middle">Up</text>
+    <rect class="box" x="120" y="415" width="140" height="44" rx="8"/>
+    <text class="pin" x="190" y="442" text-anchor="middle">Down</text>
+    <rect class="box" x="120" y="475" width="140" height="44" rx="8"/>
+    <text class="pin" x="190" y="502" text-anchor="middle">Select</text>
+  </g>
+  <path class="wire btn" d="M260 377 H360"/>
+  <path class="wire btn" d="M260 437 H360"/>
+  <path class="wire btn" d="M260 497 H360"/>
+  <!-- other leg of every button to GND -->
+  <path class="wire gnd" d="M120 377 H80 M120 437 H80 M120 497 H80 M80 377 V560 H470 V520"/>
+  <circle class="dot" cx="80" cy="437" r="4" fill="#1f2937"/>
+  <circle class="dot" cx="80" cy="497" r="4" fill="#1f2937"/>
+  <text class="note" x="92" y="584">Other leg of each button → GND (internal pull-up)</text>
+  <text class="boardpin" x="470" y="512" text-anchor="middle">GND</text>
+
+  <!-- Servo -->
+  <rect class="box" x="700" y="210" width="220" height="140" rx="10"/>
+  <text class="title" x="810" y="238" text-anchor="middle">9 g micro servo</text>
+  <text class="note" x="810" y="256" text-anchor="middle">SG90 / MG90S</text>
+  <text class="pin" x="712" y="285">Signal</text>
+  <text class="pin" x="712" y="315">+5 V</text>
+  <text class="pin" x="712" y="342">GND</text>
+  <path class="wire sig" d="M580 240 H640 V280 H700"/>
+  <path class="wire gnd" d="M580 320 H640 V338 H700"/>
+
+  <!-- External 5 V supply -->
+  <rect class="box" x="700" y="410" width="220" height="110" rx="10"/>
+  <text class="title" x="810" y="438" text-anchor="middle">5 V supply</text>
+  <text class="note" x="810" y="456" text-anchor="middle">≥ 1 A recommended</text>
+  <text class="pin" x="712" y="485">+5 V</text>
+  <text class="pin" x="712" y="510">GND</text>
+  <path class="wire v5" d="M700 310 H670 V480 H700"/>
+  <path class="wire gnd" d="M700 505 H640 V338"/>
+  <circle class="dot" cx="640" cy="338" r="4" fill="#1f2937"/>
+  <text class="note" x="810" y="545" text-anchor="middle">Common ground:</text>
+  <text class="note" x="810" y="562" text-anchor="middle">supply, servo and Nano</text>
+</svg>

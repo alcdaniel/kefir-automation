@@ -1,160 +1,173 @@
-# Kéfir automático · Tapa de tarro con Arduino Nano
+# Automatic Kefir Jar Lid · Arduino Nano
 
-Firmware y guía de montaje de una **tapa de tarro impresa en 3D que automatiza la fermentación del kéfir de leche**. Eliges 12, 24 o 36 horas en una pequeña pantalla OLED y, cuando termina la cuenta atrás, un microservo libera un émbolo con muelle que saca los gránulos de la leche. Sin Wi-Fi, sin aplicaciones y sin cuentas: un Arduino Nano, tres botones y una pantalla.
+Firmware and build guide for a **3D-printed jar lid that automates milk kefir fermentation**. Pick 12, 24 or 36 hours on a small OLED and, when the countdown ends, a micro servo releases a spring-loaded plunger that lifts the grains out of the milk. No Wi-Fi, no apps and no accounts: an Arduino Nano, three buttons and a display.
 
-> *English summary below.*
+<p align="center">
+  <img src="docs/images/photo-lid-top.jpg" alt="Printed jar lid on a glass jar: the OLED shows NORMAL 24H next to three push buttons, the servo, the spring plunger and the Arduino Nano on perfboard" width="420">
+</p>
 
-> **Seguridad alimentaria y mecánica.** Toda la electrónica va en la parte superior de la tapa, fuera de la zona húmeda. Las piezas que toquen la leche o los gránulos deben ser aptas para alimentos y fáciles de limpiar. Prueba siempre el mecanismo sin leche antes de usarlo. El temporizador no sustituye observar el kéfir: la temperatura, la cantidad de leche y el estado de los gránulos cambian el resultado.
+## Gallery
 
-## Contenido del repositorio
+### 3D model (Fusion 360)
 
-| Ruta | Descripción |
+| Overview | Front | Close-up |
+| :---: | :---: | :---: |
+| <img src="docs/images/render-overview.jpg" alt="3D render of the lid from above with the OLED stand, buttons, servo, plunger and Arduino Nano" width="260"> | <img src="docs/images/render-front.jpg" alt="3D render of the front of the lid showing the OLED, the buttons and the Nano" width="260"> | <img src="docs/images/render-top.jpg" alt="Close-up render of the plunger spring, the servo latch, the OLED and the Nano" width="260"> |
+
+### Real build
+
+| Finished lid | Countdown running | Plunger released |
+| :---: | :---: | :---: |
+| <img src="docs/images/photo-lid-top.jpg" alt="Finished lid on a glass jar showing the NORMAL 24 h preset" width="240"> | <img src="docs/images/photo-countdown.jpg" alt="Lid on the jar during the 5-second test countdown, plunger down" width="240"> | <img src="docs/images/photo-released.jpg" alt="Lid on the jar after the release, with the plunger raised by its spring" width="240"> |
+
+The two photos on the right were taken with an earlier firmware build that showed Spanish labels on the display; the current firmware shows the same screens in English (TEST, RELEASING…).
+
+> **Food and mechanical safety.** Keep all electronics on top of the lid, away from the wet area. Any part that touches the milk or the grains must be food-safe and easy to clean. Always test the mechanism without milk before using it. The timer does not replace keeping an eye on your kefir: temperature, the amount of milk and the state of the grains all change the result.
+
+## Repository contents
+
+| Path | Description |
 | --- | --- |
-| [`KefirAutomaticoNano/KefirAutomaticoNano.ino`](KefirAutomaticoNano/KefirAutomaticoNano.ino) | Firmware para Arduino Nano. |
-| [`KefirAutomaticoNano/README.md`](KefirAutomaticoNano/README.md) | Resumen rápido para cargar el sketch. |
-| `README.md` | Esta guía completa. |
+| [`KefirJarLidNano/KefirJarLidNano.ino`](KefirJarLidNano/KefirJarLidNano.ino) | Arduino Nano firmware. |
+| [`KefirJarLidNano/README.md`](KefirJarLidNano/README.md) | Quick flashing guide. |
+| [`BOM.md`](BOM.md) | Bill of materials with links to several shops. |
+| [`docs/images/`](docs/images) | Photos, 3D renders and the wiring diagram. |
+| `README.md` | This full guide. |
+| [`LICENSE.md`](LICENSE.md) | Personal-use licence. |
 
-Los modelos STL de la tapa, el émbolo y el soporte (clamp) se distribuyen por separado en el paquete descargable del proyecto.
+The STL models of the lid, the plunger and the release clamp are distributed separately in the project's downloadable package.
 
-## Material necesario
+## Bill of materials
 
-**Electrónica**
+See **[BOM.md](BOM.md)** for the full list with purchase links (Arduino Store, Amazon, AliExpress and eBay). In short:
 
-- Arduino Nano clásico (ATmega328P, 5 V, 16 MHz).
-- Pantalla OLED SSD1306 de 0,96", 128×64 píxeles, I2C (dirección `0x3C` o `0x3D`).
-- Microservo de 9 g (SG90, MG90S o similar).
-- 3 pulsadores táctiles (arriba, abajo y seleccionar).
-- Cables jumper (Dupont) y algo de soldadura sencilla.
-- Fuente USB de 5 V para el Nano y, recomendado, una fuente de 5 V de al menos 1 A para el servo.
-- Opcional: condensador de 470–1000 µF para absorber los picos de corriente del servo.
+**Electronics**
 
-**Mecánica**
+- Classic Arduino Nano (ATmega328P, 5 V, 16 MHz).
+- 0.96" SSD1306 OLED, 128×64 pixels, I2C (address `0x3C` or `0x3D`).
+- 9 g micro servo (SG90, MG90S or similar).
+- 3 tactile push buttons (up, down and select).
+- Jumper (Dupont) wires and some simple soldering.
+- 5 V USB supply for the Nano and, recommended, a 5 V supply of at least 1 A for the servo.
+- Optional: a 470–1000 µF capacitor to absorb the servo's current peaks.
 
-- Piezas impresas en 3D: tapa, émbolo y soporte.
-- Muelle de compresión de **8 mm de diámetro y unos 10 cm** de longitud, para subir el émbolo.
-- Muelle de unos **3 mm de diámetro y 5 cm**, para cortar a medida, para el sistema de liberación.
-- Unos tornillos **M3** para fijar las piezas.
-- Un tarro de vidrio con boca de rosca compatible con la tapa.
+**Mechanics**
 
-## Conexiones
+- 3D-printed parts: lid, plunger and release clamp.
+- Compression spring, **8 mm diameter and about 10 cm** long, to raise the plunger.
+- Spring of about **3 mm diameter and 5 cm**, cut to size, for the release latch.
+- A few **M3** screws.
+- A glass jar with a **TO 82** screw top.
 
-| Componente | Pin del componente | Arduino Nano | Nota |
+## Wiring
+
+<p align="center">
+  <img src="docs/images/wiring-diagram.svg" alt="Wiring diagram: OLED VDD, GND, SDA and SCK to 5V, GND, A4 and A5; buttons to D2, D3 and D4 with the other leg to GND; servo signal to D9 with an external 5 V supply and common ground" width="760">
+</p>
+
+| Component | Component pin | Arduino Nano | Note |
 | --- | --- | --- | --- |
-| OLED | VDD / VCC | 5V | La mayoría de módulos de 0,96" admiten 3,3 V y 5 V; compruébalo en el tuyo. |
-| OLED | GND | GND | Tierra común. |
-| OLED | SDA | A4 | Datos I2C (pin fijo en el Nano). |
-| OLED | SCK / SCL | A5 | Reloj I2C (pin fijo en el Nano). |
-| Servo | Señal (naranja/amarillo) | D9 | Control PWM. |
-| Servo | +5 V (rojo) | Fuente externa de 5 V | Recomendado ≥ 1 A. |
-| Servo | GND (marrón/negro) | GND | Unido también al GND de la fuente externa. |
-| Botón arriba | Una pata | D2 | La otra pata a GND. |
-| Botón abajo | Una pata | D3 | La otra pata a GND. |
-| Botón seleccionar | Una pata | D4 | La otra pata a GND. |
+| OLED | VDD / VCC | 5V | Most 0.96" modules accept 3.3 V and 5 V; check yours. |
+| OLED | GND | GND | Common ground. |
+| OLED | SDA | A4 | I2C data (fixed pin on the Nano). |
+| OLED | SCK / SCL | A5 | I2C clock (fixed pin on the Nano). |
+| Servo | Signal (orange/yellow) | D9 | PWM control. |
+| Servo | +5 V (red) | External 5 V supply | ≥ 1 A recommended. |
+| Servo | GND (brown/black) | GND | Also joined to the external supply's GND. |
+| Up button | One leg | D2 | Other leg to GND. |
+| Down button | One leg | D3 | Other leg to GND. |
+| Select button | One leg | D4 | Other leg to GND. |
 
-- Los botones usan las resistencias **pull-up internas** del Nano: cada uno va solo entre su pin y GND, sin resistencias externas.
-- En un pulsador de cuatro patas, las dos patas de cada lado están unidas entre sí. Conecta los cables en **lados opuestos**; si no, al pulsar no cambia nada.
-- Si tu módulo OLED solo admite 3,3 V en sus señales, no conectes SDA/SCL directamente al Nano de 5 V.
+- The buttons use the Nano's **internal pull-up resistors**: each one goes only between its pin and GND, with no external resistor.
+- On a four-leg tactile switch, the two legs on each side are already connected. Wire it using legs on **opposite sides**; otherwise pressing it changes nothing.
+- If your OLED module only accepts 3.3 V signals, do not connect SDA/SCL directly to the 5 V Nano.
 
-### Alimentación del servo
+### Powering the servo
 
-Un servo puede pedir picos de corriente que reinician el Nano si se alimenta desde su pin 5V mientras está conectado por USB. La opción fiable es:
+A servo can draw current peaks that reset the Nano when it is powered from the Nano's 5V pin while on USB. The reliable setup is:
 
-1. Alimentar el Nano por USB.
-2. Alimentar el cable rojo del servo con una fuente de 5 V de al menos 1 A.
-3. Unir el GND de esa fuente con el GND del Nano.
-4. Conectar la señal del servo a D9.
+1. Power the Nano over USB.
+2. Power the servo's red wire from a 5 V supply of at least 1 A.
+3. Join that supply's GND to the Nano's GND.
+4. Connect the servo signal to D9.
 
-Un condensador de 470–1000 µF entre 5 V y GND, cerca del servo, ayuda a absorber esos picos.
+A 470–1000 µF capacitor between 5 V and GND, close to the servo, helps absorb those peaks.
 
-## Cargar el firmware
+## Flashing the firmware
 
-1. Instala [Arduino IDE 2](https://www.arduino.cc/en/software).
-2. En **Herramientas → Gestionar bibliotecas**, instala:
-   - `SSD1306Ascii` (de Bill Greiman).
+1. Install [Arduino IDE 2](https://www.arduino.cc/en/software).
+2. In **Tools → Manage Libraries**, install:
+   - `SSD1306Ascii` (by Bill Greiman).
    - `Servo`.
 
-   `Wire` y `EEPROM` ya vienen incluidas con el núcleo Arduino AVR.
-3. Abre [`KefirAutomaticoNano/KefirAutomaticoNano.ino`](KefirAutomaticoNano/KefirAutomaticoNano.ino). La carpeta debe llamarse igual que el archivo `.ino`.
-4. En **Herramientas → Placa**, selecciona **Arduino Nano**.
-5. En **Herramientas → Procesador**, selecciona **ATmega328P**. Si la carga falla con un Nano clónico, prueba **ATmega328P (Old Bootloader)**.
-6. Selecciona el puerto del Nano en **Herramientas → Puerto** y pulsa **Subir**.
+   `Wire` and `EEPROM` ship with the Arduino AVR core.
+3. Open [`KefirJarLidNano/KefirJarLidNano.ino`](KefirJarLidNano/KefirJarLidNano.ino). The folder must keep the same name as the `.ino` file.
+4. In **Tools → Board**, select **Arduino Nano**.
+5. In **Tools → Processor**, select **ATmega328P**. If uploading fails on a clone, try **ATmega328P (Old Bootloader)**.
+6. Select the Nano's port in **Tools → Port** and click **Upload**.
 
-Al arrancar, el Monitor Serie (115200 baudios) indica en qué dirección ha encontrado la OLED y muestra la lista de comandos.
+At start-up, the Serial Monitor (115200 baud) reports the address where the OLED was found and prints the list of commands.
 
-## Uso con los botones
+## Using the buttons
 
-- **Arriba / abajo**: cambian entre **PRUEBA** (5 s), **RAPIDA** (12 h), **NORMAL** (24 h) y **LARGA** (36 h).
-- **Seleccionar**: inicia la opción visible. La prueba de 5 s ejecuta el ciclo completo de liberación para comprobar el mecanismo.
-- **Mantener seleccionar 1,5 s** en un preajuste: edita su duración en pasos de una hora; seleccionar la guarda.
-- **Mantener arriba o abajo 1,5 s**: abre **OPCIONES**:
-  - `TIEMPO`: duración manual de 0 minutos a 72 horas, en pasos de 30 minutos; seleccionar la inicia.
-  - `PRUEBA`: abre y cierra el servo una vez.
-  - `SERVO`: ajusta el ángulo **cerrado**, el ángulo **abierto** y los segundos que se mantiene abierto.
-  - `SALIR`.
-- **Durante la fermentación**: seleccionar pausa o continúa; mantenerlo 1,5 s **cancela sin liberar** los gránulos.
+- **Up / down**: switch between **TEST** (5 s), **QUICK** (12 h), **NORMAL** (24 h) and **LONG** (36 h).
+- **Select**: starts the option on screen. The 5-second test runs the full release cycle so you can check the mechanism.
+- **Hold select for 1.5 s** on a preset: edit its duration in one-hour steps; select saves it.
+- **Hold up or down for 1.5 s**: opens **OPTIONS**:
+  - `TIME`: manual duration from 0 minutes to 72 hours in 30-minute steps; select starts it.
+  - `TEST`: opens and closes the servo once.
+  - `SERVO`: sets the **CLOSED** angle, the **OPEN** angle and how many seconds it stays open (**HOLD**).
+  - `EXIT`.
+- **While fermenting**: select pauses or resumes; holding it for 1.5 s **cancels without releasing** the grains.
 
-La cuenta atrás se muestra en horas y minutos y solo se redibuja cuando cambia el minuto (en la prueba de 5 s se muestran segundos).
+The countdown is shown in hours and minutes and is only redrawn when the minute changes (the 5-second test shows seconds).
 
-Los preajustes de 12, 24 y 36 horas son puntos de partida para leche de vaca y gránulos activos a temperatura ambiente: 12 h suele dar un kéfir más suave, 24 h es el ritmo habitual y 36 h una opción más intensa.
+The 12, 24 and 36-hour presets are starting points for cow's milk and active grains at room temperature: 12 h usually gives a milder kefir, 24 h is the usual rhythm and 36 h a stronger option.
 
-## Uso sin botones: consola serie
+## Using it without buttons: serial console
 
-Conecta el Nano por USB, abre el **Monitor Serie** a **115200 baudios** y elige `Nueva línea` (o `Ambos NL y CR`). Escribe los comandos sin acentos.
+Connect the Nano over USB, open the **Serial Monitor** at **115200 baud** and choose `Newline` (or `Both NL & CR`).
 
-| Comando | Acción |
+| Command | Action |
 | --- | --- |
-| `AYUDA` | Muestra todos los comandos. |
-| `ESTADO` | Muestra la configuración y el tiempo restante. |
-| `DURACION 14` | Guarda una duración de 14 horas. |
-| `DURACION 12 30` | Guarda 12 horas y 30 minutos. |
-| `INICIAR` | Inicia con la duración guardada. |
-| `INICIAR 14` / `INICIAR 12 30` | Guarda la duración indicada e inicia. |
-| `PAUSA` / `CONTINUAR` | Pausa o reanuda la fermentación. |
-| `CANCELAR` | Detiene el temporizador sin liberar los gránulos. |
-| `PRUEBA` | Ejecuta un ciclo de apertura y cierre del servo. |
-| `CERRAR` | Lleva el servo a la posición cerrada. |
-| `CERRADO 0` | Guarda 0° como posición cerrada y mueve el servo allí. |
-| `LIBERACION 60` | Guarda 60° como posición de liberación. |
-| `RETENCION 3` | Guarda 3 segundos de apertura. |
+| `HELP` | Lists every command. |
+| `STATUS` | Shows the settings and the remaining time. |
+| `DURATION 14` | Saves a 14-hour duration. |
+| `DURATION 12 30` | Saves 12 hours and 30 minutes. |
+| `START` | Starts with the saved duration. |
+| `START 14` / `START 12 30` | Saves the given duration and starts. |
+| `PAUSE` / `RESUME` | Pauses or resumes the fermentation. |
+| `CANCEL` | Stops the timer without releasing the grains. |
+| `TEST` | Runs one open-and-close cycle of the servo. |
+| `CLOSE` | Moves the servo to the closed position. |
+| `CLOSED 0` | Saves 0° as the closed position and moves the servo there. |
+| `RELEASE 60` | Saves 60° as the release position. |
+| `HOLD 3` | Saves 3 seconds held open. |
 
-Los botones y la consola pueden usarse a la vez. Cada pulsación de botón aparece también en el Monitor Serie, lo que sirve para comprobar el cableado.
+Commands are case-insensitive. The Spanish aliases from earlier versions (`AYUDA`, `INICIAR`, `PAUSA`…) are still accepted. Buttons and console can be used at the same time, and every button press is echoed on the Serial Monitor, which is handy to check the wiring.
 
-## Primera calibración
+## First calibration
 
-Los valores iniciales son **0° cerrado**, **60° abierto** y **3 s** de apertura. Cada montaje necesita los suyos:
+The defaults are **0° closed**, **60° open** and **3 s** held open. Every build needs its own values:
 
-1. Monta la tapa sin leche ni gránulos.
-2. En `OPCIONES → SERVO → CERRAR`, ajusta el ángulo en que el émbolo queda retenido sin que el servo fuerce.
-3. En `ABRIR`, ajusta el ángulo en que el émbolo se libera de forma fiable.
-4. Usa `PRUEBA` varias veces y comprueba que no hay roces ni atascos.
-5. Solo cuando funcione de forma repetible, añade la leche y los gránulos.
+1. Fit the lid without milk or grains.
+2. In `OPTIONS → SERVO → CLOSED`, set the angle where the plunger is held without the servo straining.
+3. In `OPEN`, set the angle where the plunger is released reliably.
+4. Run `TEST` several times and check that nothing rubs or jams.
+5. Only when it works repeatably, add the milk and the grains.
 
-## Cortes de corriente
+## Power cuts
 
-La configuración y la cuenta atrás se guardan en la EEPROM del Nano al iniciar, pausar, continuar o cancelar, y cada minuto durante la fermentación. Tras un corte de corriente se continúa desde el último minuto guardado: **el tiempo sin alimentación no se descuenta**. Así nunca se liberan los gránulos por sorpresa al volver la luz. Para descontar los cortes con precisión haría falta añadir un reloj en tiempo real con batería, como un DS3231.
+Settings and the countdown are saved to the Nano's EEPROM when starting, pausing, resuming or cancelling, and every minute while fermenting. After a power cut the timer resumes from the last saved minute: **time without power is not counted**, so the grains are never released unexpectedly when power returns. Counting power cuts precisely would require a battery-backed real-time clock such as a DS3231.
 
-## Solución de problemas
+## Troubleshooting
 
-**La pantalla no se enciende.** Revisa que SDA vaya a A4 y SCL a A5, y que VDD y GND estén bien. El Monitor Serie indica si se ha encontrado la OLED en `0x3C` o `0x3D`; la consola sigue funcionando aunque no haya pantalla.
+**The display stays blank.** Check that SDA goes to A4, SCL to A5, and that VDD and GND are correct. The Serial Monitor reports whether the OLED was found at `0x3C` or `0x3D`; the console keeps working without a display.
 
-**Un botón no responde.** Abre el Monitor Serie: cada pulsación debe imprimir `Boton detectado`. Si no aparece, revisa que el cable llegue a D2, D3 o D4 y que uses patas en lados opuestos del pulsador.
+**A button does nothing.** Open the Serial Monitor: every press should print `Button pressed`. If it does not, check that the wire reaches D2, D3 or D4 and that you used legs on opposite sides of the switch.
 
-**El Nano se reinicia al mover el servo.** El servo está pidiendo más corriente de la que da el USB. Aliméntalo con una fuente de 5 V aparte, con GND común, y añade el condensador.
+**The Nano resets when the servo moves.** The servo is drawing more current than USB can supply. Power it from a separate 5 V supply with a common GND and add the capacitor.
 
-## Licencia
+## Licence
 
-Uso personal y no comercial. Consulta [LICENSE.md](LICENSE.md).
-
----
-
-## English summary
-
-Firmware and build guide for a **3D-printed jar lid that automates milk kefir fermentation**. Pick 12, 24 or 36 hours on a small SSD1306 OLED; when the countdown ends, a 9 g micro servo releases a spring-loaded plunger that lifts the grains out of the milk.
-
-- **Hardware:** classic Arduino Nano (ATmega328P), 0.96" SSD1306 128×64 I2C OLED, 9 g micro servo (SG90/MG90S), 3 push buttons, an 8 mm × ~10 cm compression spring (plunger), a ~3 mm × 5 cm spring cut to size (release latch), a few M3 screws, jumper wires and simple soldering.
-- **Wiring:** OLED VDD→5V, GND→GND, SDA→A4, SCK→A5 · servo signal→D9, +5 V from an external 5 V ≥ 1 A supply, common GND · buttons→D2 (up), D3 (down), D4 (select), other leg to GND (internal pull-ups).
-- **Libraries:** `SSD1306Ascii` and `Servo` (Arduino IDE Library Manager). Board: *Arduino Nano*, processor *ATmega328P* (or *Old Bootloader* for some clones).
-- **Usage:** Up/Down choose TEST (5 s), QUICK (12 h), NORMAL (24 h) or LONG (36 h); Select starts it. Hold Up/Down for the options menu (manual time up to 72 h, servo test and calibration). The serial console at 115200 baud accepts the Spanish commands listed above (`AYUDA` prints them).
-- **Power loss:** state is saved to EEPROM every minute; after a power cut it resumes from the last saved minute and never releases unexpectedly.
-
-Personal, non-commercial use only. See [LICENSE.md](LICENSE.md).
+Personal, non-commercial use. See [LICENSE.md](LICENSE.md).
