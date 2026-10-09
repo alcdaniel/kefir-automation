@@ -1,10 +1,47 @@
 /**
- * Sketch Kefir Automatico para Arduino Nano clasico (ATmega328P, 5 V / 16 MHz).
+ * Kefir automatico · Tapa de tarro para fermentar kefir con Arduino Nano
+ * =====================================================================
  *
- * OLED SSD1306 128x64 por I2C, servo de 5 V, botones opcionales y consola
- * serie a 115200 baudios. La configuracion y el temporizador se guardan en
- * EEPROM; tras un corte de corriente se reanuda desde el ultimo minuto
- * guardado, sin descontar el tiempo que estuvo apagado.
+ * Temporizador de fermentacion para una tapa de tarro impresa en 3D. Cuando la
+ * cuenta atras llega a cero, un microservo libera el embolo con muelle que
+ * saca los granulos de kefir de la leche y despues vuelve a su posicion.
+ *
+ * Hardware
+ *   - Arduino Nano clasico (ATmega328P, 5 V, 16 MHz).
+ *   - Pantalla OLED SSD1306 de 128x64 por I2C (direccion 0x3C o 0x3D).
+ *   - Microservo de 9 g (SG90, MG90S o similar).
+ *   - Tres pulsadores: arriba, abajo y seleccionar (opcionales).
+ *
+ * Conexiones (ver README.md)
+ *   OLED   VDD -> 5V    GND -> GND    SDA -> A4    SCK/SCL -> A5
+ *   Servo  senal -> D9  +5 V -> fuente de 5 V externa (>= 1 A recomendado)
+ *          GND -> GND comun con el Nano
+ *   Botones: arriba -> D2, abajo -> D3, seleccionar -> D4.
+ *            La otra pata de cada boton va a GND (pull-up interno).
+ *
+ * Bibliotecas (Gestor de bibliotecas del Arduino IDE)
+ *   - SSD1306Ascii (Bill Greiman): texto en la OLED con muy poca RAM.
+ *   - Servo: control del servo.
+ *   Wire y EEPROM vienen incluidas con el nucleo Arduino AVR.
+ *
+ * Uso
+ *   - Pantalla principal: PRUEBA (5 s), RAPIDA (12 h), NORMAL (24 h) y
+ *     LARGA (36 h). Arriba/abajo cambian de opcion y seleccionar la inicia.
+ *   - Mantener seleccionar 1,5 s en un preajuste: editar su duracion.
+ *   - Mantener arriba o abajo 1,5 s: menu de opciones (tiempo manual,
+ *     prueba del servo y calibracion de angulos).
+ *   - Durante la fermentacion: seleccionar pausa/continua y mantenerlo
+ *     1,5 s la cancela sin liberar los granulos.
+ *   - Consola serie a 115200 baudios: escribe AYUDA para ver los comandos.
+ *
+ * Persistencia
+ *   La configuracion y la cuenta atras se guardan en la EEPROM al iniciar,
+ *   pausar, continuar o cancelar, y cada minuto durante la fermentacion. Tras
+ *   un corte de corriente se reanuda desde el ultimo minuto guardado; el tiempo
+ *   sin alimentacion no se descuenta, asi nunca se libera por sorpresa.
+ *
+ * Los textos de la pantalla y de la consola no llevan acentos porque las
+ * fuentes de la OLED y muchos monitores serie solo admiten ASCII.
  */
 #include <Wire.h>
 #include <SSD1306Ascii.h>
@@ -13,43 +50,66 @@
 #include <EEPROM.h>
 #include <ctype.h>
 
-// ----- Cableado Arduino Nano ----------------------------------------------
-const byte PIN_SERVO = 9;
-const byte PIN_BUTTON_UP = 2;
-const byte PIN_BUTTON_DOWN = 3;
-const byte PIN_BUTTON_SELECT = 4;
-// Las librerias Arduino usan direcciones I2C de 7 bits. 0x7B no es una
-// direccion SSD1306 valida: es la forma de 8 bits para lectura de 0x3D.
+// ===========================================================================
+// Pines del Arduino Nano
+// ===========================================================================
+const byte PIN_SERVO = 9;          // Senal PWM del servo.
+const byte PIN_BUTTON_UP = 2;      // Pulsador "arriba" (a GND).
+const byte PIN_BUTTON_DOWN = 3;    // Pulsador "abajo" (a GND).
+const byte PIN_BUTTON_SELECT = 4;  // Pulsador "seleccionar" (a GND).
+// El bus I2C del Nano es fijo: SDA = A4 y SCL = A5.
+
+// ===========================================================================
+// Pantalla OLED
+// ===========================================================================
+// Las bibliotecas de Arduino usan direcciones I2C de 7 bits. Algunos modulos
+// imprimen 0x78 o 0x7A en la serigrafia: son las formas de 8 bits de 0x3C y
+// 0x3D. El programa prueba las dos direcciones al arrancar.
 const byte OLED_PRIMARY_ADDRESS = 0x3C;
 const byte OLED_ALTERNATIVE_ADDRESS = 0x3D;
 const byte SCREEN_WIDTH = 128;
 const byte SCREEN_HEIGHT = 64;
 
-const unsigned long SAVE_INTERVAL_MS = 60000UL;
-const unsigned long LONG_PRESS_MS = 1500UL;
+// ===========================================================================
+// Temporizador y preajustes
+// ===========================================================================
+const unsigned long SAVE_INTERVAL_MS = 60000UL;  // Guardado periodico en EEPROM.
+const unsigned long LONG_PRESS_MS = 1500UL;      // Duracion de una pulsacion larga.
 const unsigned int MIN_DURATION_MINUTES = 0;
 const unsigned int MAX_DURATION_MINUTES = 72 * 60;
-const byte PRESET_COUNT = 3;
+const byte PRESET_COUNT = 3;                     // RAPIDA, NORMAL y LARGA.
+// Opciones de la pantalla principal: 0 = prueba de 5 s, 1..3 = preajustes.
 const byte HOME_TEST_SELECTION = 0;
 const byte HOME_FIRST_PRESET_SELECTION = 1;
 const byte HOME_OPTION_COUNT = PRESET_COUNT + 1;
 const uint16_t DEFAULT_PRESET_DURATION_MINUTES[PRESET_COUNT] = {12 * 60, 24 * 60, 36 * 60};
-const uint32_t MECHANISM_TEST_FERMENTATION_MS = 5000UL;
-const byte SERIAL_BUFFER_SIZE = 64;
-// KFR2 reinicia los antiguos valores almacenados para aplicar los nuevos
-// angulos por defecto (cerrado 0 grados, abierto 60 grados).
+const uint32_t MECHANISM_TEST_FERMENTATION_MS = 5000UL;  // Prueba rapida del ciclo completo.
+const byte SERIAL_BUFFER_SIZE = 64;              // Longitud maxima de un comando serie.
+
+// ===========================================================================
+// EEPROM
+// ===========================================================================
+// Los "numeros magicos" identifican el formato de los datos guardados. Si no
+// coinciden (EEPROM vacia o de otro programa), se cargan los valores por
+// defecto. Cambia el valor si modificas las estructuras PersistentData o
+// PresetData para descartar datos antiguos incompatibles.
 const uint32_t EEPROM_MAGIC = 0x4B465232UL;  // "KFR2"
 
 SSD1306AsciiWire display;
 Servo releaseServo;
 
+// Estado del temporizador de fermentacion.
 enum RunState : byte { IDLE, RUNNING, PAUSED };
+
+// Pantallas de la interfaz. drawScreen() dibuja cada una y handleButtons()
+// decide a cual se pasa con cada pulsacion.
 enum Screen : byte {
   HOME, EDIT_PRESET_DURATION, ADVANCED_MENU, DURATION, SETTINGS, EDIT_HOME_ANGLE,
   EDIT_RELEASE_ANGLE, EDIT_RELEASE_TIME, RUNNING_SCREEN, PAUSED_SCREEN, DONE
 };
 
-// EEPROM.put() escribe solo las celdas que han cambiado, reduciendo desgaste.
+// Configuracion y estado del temporizador guardados en la EEPROM (direccion 0).
+// EEPROM.put() solo reescribe las celdas que cambian, lo que reduce el desgaste.
 struct PersistentData {
   uint32_t magic;
   uint16_t durationMinutes;
@@ -61,6 +121,7 @@ struct PersistentData {
   byte check;
 };
 
+// Duracion de los tres preajustes, guardada justo despues de PersistentData.
 struct PresetData {
   uint32_t magic;
   uint16_t minutes[PRESET_COUNT];
@@ -69,6 +130,11 @@ struct PresetData {
 
 const uint32_t PRESET_EEPROM_MAGIC = 0x4B505233UL;  // "KPR3"
 
+// ===========================================================================
+// Estado del programa
+// ===========================================================================
+// Valores por defecto de la primera ejecucion; despues se leen de la EEPROM.
+// Los angulos dependen del montaje: calibralos desde el menu SERVO.
 uint16_t durationMinutes = DEFAULT_PRESET_DURATION_MINUTES[1];
 uint16_t presetDurationMinutes[PRESET_COUNT] = {12 * 60, 24 * 60, 36 * 60};
 byte homeAngle = 0;
@@ -76,7 +142,7 @@ byte releaseAngle = 60;
 byte releaseSeconds = 3;
 RunState runState = IDLE;
 Screen screen = HOME;
-byte homeSelection = 2;  // Prueba, rapida, normal, larga: normal es la opcion central.
+byte homeSelection = 2;  // Prueba, rapida, normal, larga: se empieza en NORMAL.
 byte advancedSelection = 0;
 byte settingsSelection = 0;
 uint32_t remainingMs = 0;
@@ -91,8 +157,9 @@ bool ignoreNextHomeSelectRelease = false;
 char serialBuffer[SERIAL_BUFFER_SIZE];
 byte serialBufferLength = 0;
 
-// SSD1306Ascii escribe directamente en la pantalla. Guardamos el ultimo
-// estado dibujado para no borrar y redibujar todo en cada vuelta de loop().
+// SSD1306Ascii escribe directamente en la pantalla, sin bufer en RAM. Se
+// guarda el ultimo estado dibujado para redibujar solo cuando algo cambia y
+// evitar parpadeos en cada vuelta de loop().
 Screen lastRenderedScreen = static_cast<Screen>(255);
 byte lastRenderedHomeSelection = 255;
 byte lastRenderedAdvancedSelection = 255;
@@ -104,6 +171,14 @@ byte lastRenderedReleaseSeconds = 255;
 bool lastRenderedReleaseInProgress = false;
 uint32_t lastRenderedTimerSecond = UINT32_MAX;
 
+// ===========================================================================
+// Pulsadores
+// ===========================================================================
+// Pulsador con antirrebote de 30 ms conectado entre un pin y GND (INPUT_PULLUP:
+// LOW = pulsado). Cada llamada a update() genera, como mucho una vez:
+//   pressed()        -> el boton acaba de bajar.
+//   longPressed()    -> lleva LONG_PRESS_MS mantenido.
+//   shortReleased()  -> se ha soltado sin llegar a pulsacion larga.
 class Button {
  public:
   Button(byte pin) : pin_(pin) {}
@@ -158,6 +233,10 @@ Button buttonUp(PIN_BUTTON_UP);
 Button buttonDown(PIN_BUTTON_DOWN);
 Button buttonSelect(PIN_BUTTON_SELECT);
 
+// ===========================================================================
+// Persistencia en EEPROM
+// ===========================================================================
+// Suma de control XOR sencilla para detectar datos corruptos o incompletos.
 byte checksum(const PersistentData &data) {
   const byte *bytes = reinterpret_cast<const byte *>(&data);
   byte value = 0;
@@ -193,6 +272,8 @@ void savePresetData() {
   EEPROM.put(sizeof(PersistentData), data);
 }
 
+// Carga la configuracion; si los datos no son validos, guarda los valores por
+// defecto para la proxima vez.
 void loadPersistentData() {
   PersistentData data;
   EEPROM.get(0, data);
@@ -226,6 +307,10 @@ void loadPresetData() {
   for (byte i = 0; i < PRESET_COUNT; ++i) presetDurationMinutes[i] = data.minutes[i];
 }
 
+// ===========================================================================
+// Formato de tiempos
+// ===========================================================================
+// HH:MM:SS truncado, para la consola serie.
 void formatDuration(uint32_t milliseconds, char *out, byte length) {
   uint32_t seconds = milliseconds / 1000UL;
   uint16_t hours = seconds / 3600UL;
@@ -234,6 +319,7 @@ void formatDuration(uint32_t milliseconds, char *out, byte length) {
   snprintf(out, length, "%02u:%02u:%02u", hours, minutes, secs);
 }
 
+// HH:MM:SS redondeado hacia arriba, para la prueba de 5 segundos.
 void formatSecondDuration(uint32_t milliseconds, char *out, byte length) {
   const uint32_t seconds = (milliseconds + 999UL) / 1000UL;
   const uint16_t hours = seconds / 3600UL;
@@ -242,16 +328,20 @@ void formatSecondDuration(uint32_t milliseconds, char *out, byte length) {
   snprintf(out, length, "%02u:%02u:%02u", hours, minutes, secs);
 }
 
+// HH:MM redondeado hacia arriba: 23 h 59 min 59 s se sigue viendo como 24:00.
 void formatMinuteDuration(uint32_t milliseconds, char *out, byte length) {
-  // Redondeamos hacia arriba: 23 h 59 min 59 s se sigue viendo como 24:00.
   const uint32_t totalMinutes = (milliseconds + 59999UL) / 60000UL;
   const uint16_t hours = totalMinutes / 60UL;
   const byte minutes = totalMinutes % 60UL;
   snprintf(out, length, "%02u:%02u", hours, minutes);
 }
 
-// Esta OLED tiene una franja superior amarilla de 16 px y una zona inferior
-// azul. Los titulos ocupan solo la franja amarilla; las cifras viven abajo.
+// ===========================================================================
+// Dibujo en la OLED
+// ===========================================================================
+// Muchas OLED de 0,96" bicolor tienen una franja superior amarilla de 16 px y
+// el resto azul. Los titulos ocupan solo la franja superior y las cifras van
+// debajo; en una pantalla monocolor se ve igual de bien.
 void drawTitle(const __FlashStringHelper *title, byte column) {
   display.clear();
   display.setFont(Adafruit5x7);
@@ -261,6 +351,7 @@ void drawTitle(const __FlashStringHelper *title, byte column) {
   display.set1X();
 }
 
+// Flechas laterales que indican que hay mas opciones a izquierda o derecha.
 void drawArrows(bool showLeft, bool showRight) {
   display.setFont(Adafruit5x7);
   display.set2X();
@@ -269,6 +360,7 @@ void drawArrows(bool showLeft, bool showRight) {
   display.set1X();
 }
 
+// Numero grande seguido de "H", centrado (por ejemplo "24 H").
 void drawBigHours(byte hours) {
   char value[4];
   snprintf(value, sizeof(value), "%u", hours);
@@ -292,6 +384,7 @@ void drawBigHours(byte hours) {
   display.set1X();
 }
 
+// Cuenta atras grande y centrada: HH:MM o, con showSeconds, HH:MM:SS.
 void drawBigTimer(uint32_t milliseconds, bool showSeconds = false) {
   char value[16];
   if (showSeconds) formatSecondDuration(milliseconds, value, sizeof(value));
@@ -305,6 +398,7 @@ void drawBigTimer(uint32_t milliseconds, bool showSeconds = false) {
   display.set1X();
 }
 
+// Valor numerico grande y centrado (angulos y segundos del servo).
 void drawBigValue(byte value) {
   char text[4];
   snprintf(text, sizeof(text), "%u", value);
@@ -317,6 +411,7 @@ void drawBigValue(byte value) {
   display.set1X();
 }
 
+// Dibuja la pantalla completa correspondiente a `screen`.
 void drawScreen() {
   if (!displayAvailable) return;
   switch (screen) {
@@ -393,6 +488,8 @@ void drawScreen() {
   }
 }
 
+// Devuelve true si ha cambiado algo que obliga a redibujar la pantalla entera
+// y memoriza el estado actual como "ya dibujado".
 bool needsFullRedraw() {
   const bool changed =
       screen != lastRenderedScreen ||
@@ -421,6 +518,8 @@ bool needsFullRedraw() {
   return changed;
 }
 
+// Durante la cuenta atras solo se actualizan las cifras, una vez por minuto
+// (o por segundo en la prueba de 5 s).
 void updateTimerText() {
   if (!displayAvailable || (screen != RUNNING_SCREEN && screen != PAUSED_SCREEN)) return;
   const uint32_t displayTick = shortTestInProgress
@@ -434,9 +533,14 @@ void updateTimerText() {
   lastRenderedTimerSecond = displayTick;
 }
 
+// ===========================================================================
+// Servo y ciclo de fermentacion
+// ===========================================================================
 void moveServoHome() { releaseServo.write(homeAngle); }
 void moveServoRelease() { releaseServo.write(releaseAngle); }
 
+// Mueve el servo a la posicion de liberacion. loop() lo devuelve a la posicion
+// cerrada cuando pasan `releaseSeconds` segundos (finishRelease()).
 void beginRelease(bool isTest) {
   releaseIsTest = isTest;
   releaseInProgress = true;
@@ -506,6 +610,8 @@ void cancelFermentation() {
   Serial.println(F("Fermentacion cancelada. Servo en posicion cerrada."));
 }
 
+// Descuenta el tiempo transcurrido desde la ultima vuelta. millis() se resta
+// sin signo, por lo que el desbordamiento cada ~49 dias no afecta.
 void updateTimer(uint32_t now) {
   if (runState != RUNNING) return;
   uint32_t elapsed = now - lastTickMs;
@@ -525,6 +631,10 @@ void updateTimer(uint32_t now) {
   }
 }
 
+// ===========================================================================
+// Consola serie (115200 baudios, comandos terminados en salto de linea)
+// ===========================================================================
+// Convierte `value` en un entero dentro de [minimum, maximum].
 bool parseNumber(const char *value, long minimum, long maximum, long &result) {
   if (value == NULL || *value == '\0') return false;
   char *end = NULL;
@@ -585,6 +695,7 @@ bool setDurationFromArguments(char *hoursText, char *minutesText) {
   return true;
 }
 
+// Interpreta una linea completa: COMANDO [argumento1] [argumento2].
 void handleSerialCommand(char *line) {
   while (isspace(*line)) ++line;
   if (*line == '\0') return;
@@ -647,6 +758,7 @@ void handleSerialCommand(char *line) {
   Serial.println(F("Comando no reconocido. Escribe AYUDA."));
 }
 
+// Acumula caracteres hasta recibir un salto de linea y ejecuta el comando.
 void readSerialCommands() {
   while (Serial.available()) {
     char received = Serial.read();
@@ -664,6 +776,9 @@ void readSerialCommands() {
   }
 }
 
+// ===========================================================================
+// Interfaz con botones
+// ===========================================================================
 void startPresetFermentation() {
   durationMinutes = presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION];
   startFermentation();
@@ -687,8 +802,8 @@ void handleButtons() {
     }
     if (buttonUp.pressed() && homeSelection > HOME_TEST_SELECTION) --homeSelection;
     if (buttonDown.pressed() && homeSelection < HOME_OPTION_COUNT - 1) ++homeSelection;
-    // En inicio, un toque inicia al soltar; mantener SELECT abre la edicion
-    // del preajuste mostrado sin iniciar antes el temporizador.
+    // En la pantalla principal un toque corto inicia al soltar; mantener
+    // seleccionar abre la edicion del preajuste sin iniciar el temporizador.
     if (buttonSelect.longPressed() && homeSelection != HOME_TEST_SELECTION) screen = EDIT_PRESET_DURATION;
     else if (buttonSelect.shortReleased()) {
       if (ignoreNextHomeSelectRelease) ignoreNextHomeSelectRelease = false;
@@ -754,6 +869,9 @@ void handleButtons() {
   if (buttonSelect.pressed()) { savePersistentData(); screen = SETTINGS; }
 }
 
+// ===========================================================================
+// Arranque y bucle principal
+// ===========================================================================
 bool isI2cDeviceAt(byte address) {
   Wire.beginTransmission(address);
   return Wire.endTransmission() == 0;
@@ -771,7 +889,7 @@ void setup() {
   loadPersistentData();
   loadPresetData();
   Wire.begin();                 // Nano: SDA = A4, SCL = A5 (I2C fijo).
-  Wire.setClock(100000L);       // I2C estandar, igual que en la ESP32.
+  Wire.setClock(100000L);       // I2C estandar a 100 kHz, el mas compatible.
   byte oledAddress = findOledAddress();
   if (oledAddress != 0) {
     display.begin(&Adafruit128x64, oledAddress);
@@ -786,6 +904,8 @@ void setup() {
   }
   releaseServo.attach(PIN_SERVO);
   moveServoHome();
+  // Si se corto la corriente durante una fermentacion, se continua desde el
+  // ultimo minuto guardado.
   if (runState == RUNNING && remainingMs > 0) {
     screen = RUNNING_SCREEN;
     lastTickMs = lastSaveMs = millis();
@@ -804,14 +924,15 @@ void setup() {
 void loop() {
   uint32_t now = millis();
   buttonUp.update(now); buttonDown.update(now); buttonSelect.update(now);
+  // Eco de cada pulsacion por la consola: util para comprobar el cableado.
   if (buttonUp.pressed()) Serial.println(F("Boton detectado: ARRIBA (D2)"));
   if (buttonDown.pressed()) Serial.println(F("Boton detectado: ABAJO (D3)"));
   if (buttonSelect.pressed()) Serial.println(F("Boton detectado: SELECCIONAR (D4)"));
   readSerialCommands();
   updateTimer(now);
-  // updateTimer() puede iniciar la liberacion en esta misma vuelta. No uses
-  // `now`, que se tomo antes de esa llamada: si releaseStartedMs es unos ms
-  // posterior, la resta sin signo se desborda y cerraria el servo de inmediato.
+  // updateTimer() puede iniciar la liberacion en esta misma vuelta, asi que se
+  // vuelve a leer millis(): con `now`, que es anterior a releaseStartedMs, la
+  // resta sin signo se desbordaria y el servo se cerraria de inmediato.
   const uint32_t releaseNow = millis();
   if (releaseInProgress && releaseNow - releaseStartedMs >= static_cast<uint32_t>(releaseSeconds) * 1000UL) {
     finishRelease();

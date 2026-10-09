@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Local code-index tooling
+.codegraph/
+
+# Arduino build output
+build/
