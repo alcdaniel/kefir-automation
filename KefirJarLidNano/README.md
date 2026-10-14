@@ -23,3 +23,7 @@ The full guide (bill of materials, wiring, usage, serial console, calibration an
 | Select button | D4 (other leg to GND) |
 
 Power the servo from a 5 V supply of at least 1 A and join its GND to the Nano's GND. Serial Monitor: 115200 baud; type `HELP` to list the commands.
+
+## Licence
+
+© 2026 Daniel Álvarez Conde · CC BY-NC-SA 4.0 · see [LICENSE.md](../LICENSE.md).

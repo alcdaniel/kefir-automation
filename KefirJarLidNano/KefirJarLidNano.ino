@@ -6,6 +6,10 @@
  * zero, a micro servo releases the spring-loaded plunger that lifts the kefir
  * grains out of the milk, then returns to its closed position.
  *
+ * Copyright (c) 2026 Daniel Álvarez Conde
+ * Licence: CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)
+ * Project: https://www.alcdaniel.com/store/product/?slug=kefir-automation-jar-lid
+ *
  * Hardware
  *   - Classic Arduino Nano (ATmega328P, 5 V, 16 MHz).
  *   - SSD1306 128x64 I2C OLED (address 0x3C or 0x3D).

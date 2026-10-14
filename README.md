@@ -33,7 +33,7 @@ The two photos on the right were taken with an earlier firmware build that showe
 | [`BOM.md`](BOM.md) | Bill of materials with links to several shops. |
 | [`docs/images/`](docs/images) | Photos, 3D renders and the wiring diagram. |
 | `README.md` | This full guide. |
-| [`LICENSE.md`](LICENSE.md) | Personal-use licence. |
+| [`LICENSE.md`](LICENSE.md) | CC BY-NC-SA 4.0 licence notice. |
 
 The STL models of the lid, the plunger and the release clamp are distributed separately in the project's downloadable package.
 
@@ -170,4 +170,4 @@ Settings and the countdown are saved to the Nano's EEPROM when starting, pausing
 
 ## Licence
 
-Personal, non-commercial use. See [LICENSE.md](LICENSE.md).
+© 2026 Daniel Álvarez Conde. Licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/): firmware and documentation can be shared and adapted for non-commercial purposes if you credit the author, link to the licence and to the [original project page](https://www.alcdaniel.com/store/product/?slug=kefir-automation-jar-lid), indicate changes and share adaptations under the same licence. Third-party libraries keep their own licences. See [LICENSE.md](LICENSE.md).
