@@ -56,7 +56,7 @@ See **[BOM.md](BOM.md)** for the full list with purchase links (Arduino Store, A
 - 3D-printed parts: lid, plunger and release clamp.
 - Compression spring, **8 mm diameter and about 10 cm** long, to raise the plunger.
 - Spring of about **3 mm diameter and 5 cm**, cut to size, for the release latch.
-- A few **M3** screws.
+- 2 **M3** screws (servo) and 1 **M2** screw (release lock).
 - A glass jar with a **TO 82** screw top.
 
 ## Wiring
@@ -108,19 +108,45 @@ A 470–1000 µF capacitor between 5 V and GND, close to the servo, helps absorb
 
 At start-up, the Serial Monitor (115200 baud) reports the address where the OLED was found and prints the list of commands.
 
+## First start: language
+
+The first time the lid starts, it asks for the language: press **up or down** to switch between **ENGLISH** and **ESPANOL**, then **select** to confirm. The choice is saved, so this only appears once (or again after a firmware update that resets the EEPROM).
+
 ## Using the buttons
 
-- **Up / down**: switch between **TEST** (5 s), **QUICK** (12 h), **NORMAL** (24 h) and **LONG** (36 h).
-- **Select**: starts the option on screen. The 5-second test runs the full release cycle so you can check the mechanism.
+- **Up / down**: move through **TEST** (5 s), **QUICK** (12 h), **NORMAL** (24 h), **LONG** (36 h) and **MENU**.
+- **Select**: starts the option on screen; on **MENU** it opens the options. Buttons act when released, so a press never triggers a second action on the next screen. The 5-second test runs the full release cycle so you can check the mechanism.
 - **Hold select for 1.5 s** on a preset: edit its duration in one-hour steps; select saves it.
-- **Hold up or down for 1.5 s**: opens **OPTIONS**:
-  - `TIME`: manual duration from 0 minutes to 72 hours in 30-minute steps; select starts it.
-  - `TEST`: opens and closes the servo once.
+- **Hold up or down for 1.5 s** (from anywhere on the home screen): also opens **MENU**.
+- **MENU** (options):
+  - `TIME`: lists **QUICK**, **NORMAL** and **LONG** with their times (up/down to choose, **EXIT** to go back). Select on a preset starts editing it: the time **blinks** to show you are in edit mode, up/down change it in 30-minute steps, and select saves it and returns to the list. Nothing starts.
   - `SERVO`: sets the **CLOSED** angle, the **OPEN** angle and how many seconds it stays open (**HOLD**).
-  - `EXIT`.
-- **While fermenting**: select pauses or resumes; holding it for 1.5 s **cancels without releasing** the grains.
+  - `LANGUAGE`: switches between English and Spanish. The footer shows the language it will switch to.
+  - `EXIT`: back to the home screen.
+- **While fermenting**: **up** adds 30 minutes (up to 72 hours in total; not during the 5-second test). Holding **select** for 1.5 s **cancels**: the servo releases the grains for the configured hold time and then closes, the same as when the timer reaches zero.
+- The home screen opens on the last preset you started, so you can start it again with one press of select.
 
-The countdown is shown in hours and minutes and is only redrawn when the minute changes (the 5-second test shows seconds).
+The character is a kefir grain called **KEFI**. It says hello when the lid starts. It has a few animations:
+
+- **Start**: when a fermentation starts the grain appears in the middle of the screen, hops and winks, then slides to its place and the time shows.
+- **Every minute**: the grain winks and hops, then the new time appears.
+- **Blinks** now and then while it is on screen.
+- **Releasing**: the grain shakes while the servo moves, with a surprised face.
+- **Done**: when the grains are released the grain bobs and sparkles in the middle of the screen, with no text. After 30 seconds without a press the screen dims; any button returns to the home screen.
+- **No time set**: a worried grain shakes once.
+
+The menus are not animated, so they respond straight away.
+
+## Power saving
+
+After 30 seconds without touching a button (or sending a serial command):
+
+- **While fermenting**: the screen dims to its lowest brightness and shows only the time left.
+- **Otherwise**: the screen turns off.
+
+The servo is also disconnected while the lid is closed, since it holds nothing there. It is connected only for the release (and while you calibrate the angles in SERVO), which saves power.
+
+Any button wakes it. That press only wakes the screen; it does not also act on what is shown. The screen also wakes by itself when the fermentation ends and the grains are released.
 
 The 12, 24 and 36-hour presets are starting points for cow's milk and active grains at room temperature: 12 h usually gives a milder kefir, 24 h is the usual rhythm and 36 h a stronger option.
 
@@ -136,8 +162,8 @@ Connect the Nano over USB, open the **Serial Monitor** at **115200 baud** and ch
 | `DURATION 12 30` | Saves 12 hours and 30 minutes. |
 | `START` | Starts with the saved duration. |
 | `START 14` / `START 12 30` | Saves the given duration and starts. |
-| `PAUSE` / `RESUME` | Pauses or resumes the fermentation. |
-| `CANCEL` | Stops the timer without releasing the grains. |
+| `ADD` | Adds 30 minutes to the running fermentation. |
+| `CANCEL` | Cancels and releases the grains now, like the timer does at zero. |
 | `TEST` | Runs one open-and-close cycle of the servo. |
 | `CLOSE` | Moves the servo to the closed position. |
 | `CLOSED 0` | Saves 0° as the closed position and moves the servo there. |
@@ -158,7 +184,7 @@ The defaults are **0° closed**, **60° open** and **3 s** held open. Every buil
 
 ## Power cuts
 
-Settings and the countdown are saved to the Nano's EEPROM when starting, pausing, resuming or cancelling, and every minute while fermenting. After a power cut the timer resumes from the last saved minute: **time without power is not counted**, so the grains are never released unexpectedly when power returns. Counting power cuts precisely would require a battery-backed real-time clock such as a DS3231.
+Settings and the countdown are saved to the Nano's EEPROM when starting, adding time or cancelling, and every 5 minutes while fermenting (this limits EEPROM wear). After a power cut the countdown resumes from the last saved point, so up to 5 minutes can be lost: **time without power is not counted**. If the power goes out while the grains are being released, they are not released again when it returns; the servo has to be moved by hand. Counting power cuts precisely would require a battery-backed real-time clock such as a DS3231.
 
 ## Troubleshooting
 
