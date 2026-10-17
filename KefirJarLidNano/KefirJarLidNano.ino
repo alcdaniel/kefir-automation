@@ -42,9 +42,10 @@
  *     which releases the grains like the timer does at zero.
  *   - Buttons act when released (a hold is a separate action), so pressing
  *     one button never triggers a second action on the next screen.
- *   - Power saving: after 30 s without buttons the screen dims (fermenting:
- *     only the time left; finished: DONE) or turns off. A press wakes it;
- *     after DONE, a press goes back to the home screen.
+ *   - Power saving: after 30 s without buttons the screen dims to a
+ *     low-power view of the current screen (the time left while fermenting,
+ *     the word of the menu, or the grain when done) and a small mark flashes
+ *     every 8 s. A press wakes it; after DONE, a press goes back home.
  *   - Serial console at 115200 baud (English only): type HELP for the commands.
  *
  * Screen
@@ -110,6 +111,8 @@ const byte FOOTER_COL = 4;
 // ===========================================================================
 const unsigned long SAVE_INTERVAL_MS = 300000UL;  // Periodic EEPROM save (5 min).
 const unsigned long LONG_PRESS_MS = 1500UL;       // Long-press duration.
+const uint32_t REPEAT_DELAY_MS = 500UL;           // Holding up/down: repeat starts after this...
+const uint32_t REPEAT_EVERY_MS = 120UL;           // ...and then repeats this often.
 const unsigned long NO_TIME_MESSAGE_MS = 2500UL;  // "NO TIME" stays this long.
 const uint32_t ONE_MINUTE_MS = 60000UL;           // Above this: HH:MM; below: 00:SS.
 const unsigned int MIN_DURATION_MINUTES = 0;
@@ -129,12 +132,12 @@ const byte TEST_FLAG = 0x80;                      // Bit in the saved runState: 
 const byte LEGACY_PAUSED_STATE = 2;               // Runs paused by older firmware resume.
 
 // Power saving. After IDLE_TIMEOUT_MS without buttons or serial commands the
-// display dims (fermenting: only the time left) or turns off.
+// display dims to a low-power view of the current screen. It is never off.
 const unsigned long IDLE_TIMEOUT_MS = 30000UL;
 const byte CONTRAST_FULL = 0xCF;
 const byte CONTRAST_DIM = 0x08;
-const byte CMD_DISPLAY_OFF = 0xAE;
-const byte CMD_DISPLAY_ON = 0xAF;
+const uint32_t HEARTBEAT_MS = 8000UL;   // While dimmed, a small mark flashes every 8 s
+const uint32_t HEARTBEAT_ON_MS = 150UL;  // ... for this long, so it is clear the lid is on.
 
 // Options menu items.
 const byte MENU_ITEM_COUNT = 4;
@@ -162,7 +165,7 @@ enum Language : byte { ENGLISH, SPANISH };
 enum RunState : byte { IDLE, RUNNING };
 
 // Display power state: full screen, dimmed time, or off.
-enum DisplayMode : byte { DISPLAY_AWAKE, DISPLAY_DIM, DISPLAY_OFF };
+enum DisplayMode : byte { DISPLAY_AWAKE, DISPLAY_DIM };
 
 // User-interface screens. drawScreen() draws each one and handleButtons()
 // decides which one comes next on every button press.
@@ -230,7 +233,8 @@ byte languageChoice = ENGLISH;  // Highlighted option on the language screen.
 byte homeSelection = HOME_DEFAULT_SELECTION;
 byte presetSelection = HOME_DEFAULT_SELECTION;  // Last preset on the home screen.
 byte timeChoice = 0;                  // TIME menu: 0-2 = presets, 3 = back.
-bool blinkVisible = true;             // Blinking time while editing (TIME_EDIT).
+bool blinkVisible = true;             // Blinking field while editing (TIME_EDIT).
+byte editField = 0;                   // TIME_EDIT: 0 = hours, 1 = tens of minutes, 2 = units.
 uint32_t lastBlinkMs = 0;
 const uint32_t BLINK_MS = 500;
 
@@ -254,10 +258,12 @@ bool releaseIsTest = false;
 bool shortTestInProgress = false;
 bool displayAvailable = false;
 DisplayMode displayMode = DISPLAY_AWAKE;
-Screen sleepScreen = HOME;      // Screen that was showing when the display dimmed or turned off.
+Screen sleepScreen = HOME;      // Screen that was showing when the display dimmed.
 uint32_t lastActivityMs = 0;    // Last button press or serial command.
 uint32_t lastDimTick = UINT32_MAX;
 bool wakeHeld = false;          // The press that woke the display is ignored until released.
+bool heartbeatOn = false;
+uint32_t heartbeatChangeMs = 0;
 char serialBuffer[SERIAL_BUFFER_SIZE];
 byte serialBufferLength = 0;
 
@@ -301,6 +307,7 @@ class Button {
     pressed_ = false;
     longPressed_ = false;
     shortReleased_ = false;
+    repeated_ = false;
     bool readState = digitalRead(pin_);
     if (readState != rawState_) {
       rawState_ = readState;
@@ -312,6 +319,7 @@ class Button {
         downMs_ = now;
         longSent_ = false;
         pressed_ = true;
+        nextRepeatMs_ = now + REPEAT_DELAY_MS;
       } else if (!longSent_) {
         shortReleased_ = true;
       }
@@ -320,8 +328,14 @@ class Button {
       longSent_ = true;
       longPressed_ = true;
     }
+    // While held, reports a repeat every REPEAT_EVERY_MS after REPEAT_DELAY_MS.
+    if (stableState_ == LOW && now >= nextRepeatMs_) {
+      repeated_ = true;
+      nextRepeatMs_ = now + REPEAT_EVERY_MS;
+    }
   }
 
+  bool repeated() const { return repeated_; }
   bool pressed() const { return pressed_; }
   bool longPressed() const { return longPressed_; }
   bool shortReleased() const { return shortReleased_; }
@@ -335,8 +349,10 @@ class Button {
   bool longPressed_ = false;
   bool shortReleased_ = false;
   bool longSent_ = false;
+  bool repeated_ = false;
   uint32_t changedMs_ = 0;
   uint32_t downMs_ = 0;
+  uint32_t nextRepeatMs_ = 0;
 };
 
 Button buttonUp(PIN_BUTTON_UP);
@@ -722,6 +738,7 @@ void drawLanguagePicker() {
 // definitions below.
 void drawSpriteAt(int x, int y, const uint8_t *sprite);
 void drawClock();
+void drawEditTime();
 void startAnimation(Animation kind);
 void stopAnimation();
 
@@ -754,10 +771,11 @@ void drawScreen() {
       drawArrows(homeSelection > HOME_TEST_SELECTION, homeSelection < HOME_OPTION_COUNT - 1);
       break;
     case EDIT_PRESET_DURATION:
-      drawPresetTitle(homeSelection - HOME_FIRST_PRESET_SELECTION);
-      drawFace(FACE_FOCUS);
-      drawMinutesText(presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION]);
-      drawFooter(F("UP/DN 1H  OK SAVE"), F("+/- 1H  OK GUARDAR"));
+      drawPresetTitle(timeChoice);
+      blinkVisible = true;
+      lastBlinkMs = millis();
+      drawEditTime();
+      drawFooter(F("UP/DN  OK NEXT/SAVE"), F("+/-  OK SIG/GUARDAR"));
       break;
     case ADVANCED_MENU:
       drawTitle(F("OPTIONS"), F("OPCIONES"));
@@ -787,11 +805,10 @@ void drawScreen() {
       break;
     case TIME_EDIT:
       drawPresetTitle(timeChoice);
-      drawFace(FACE_FOCUS);
       blinkVisible = true;
       lastBlinkMs = millis();
-      drawMinutesText(presetDurationMinutes[timeChoice]);
-      drawFooter(F("UP/DN 30M  OK SAVE"), F("+/- 30M  OK GUARDAR"));
+      drawEditTime();
+      drawFooter(F("UP/DN  OK NEXT/SAVE"), F("+/-  OK SIG/GUARDAR"));
       break;
     case SETTINGS:
       drawTitle(F("SERVO"), F("SERVO"));
@@ -900,21 +917,72 @@ void updateTimerText() {
   drawClock();
 }
 
-// Blinks the time while editing, like a clock in setting mode. Only the time
+// Hours and minutes drawn as fields around a colon, across the whole width:
+// HH:MD where M and D are the tens and units of the minutes. A field can be
+// hidden (blink off) and the layout stays put, because it is measured with "8".
+void drawTimeFields(uint16_t totalMinutes, bool showHours, bool showTens, bool showUnits) {
+  char hours[4], tens[2], units[2];
+  snprintf(hours, sizeof(hours), "%02u", totalMinutes / 60);
+  snprintf(tens, sizeof(tens), "%u", (totalMinutes % 60) / 10);
+  snprintf(units, sizeof(units), "%u", totalMinutes % 10);
+  display.clear(0, SCREEN_WIDTH - 1, TIME_ROW, TIME_ROW + 2);
+  display.setFont(Verdana_digits_24);
+  display.set1X();
+  const byte digit = display.strWidth("8");
+  const byte colon = display.strWidth(":");
+  const byte width = 4 * digit + colon + 1;
+  const byte x = (SCREEN_WIDTH - width) / 2;
+  if (showHours) { display.setCursor(x, TIME_ROW); display.print(hours); }
+  display.setCursor(x + 2 * digit, TIME_ROW);
+  display.print(F(":"));
+  if (showTens) { display.setCursor(x + 2 * digit + colon + 1, TIME_ROW); display.print(tens); }
+  if (showUnits) { display.setCursor(x + 3 * digit + colon + 1, TIME_ROW); display.print(units); }
+  display.setFont(Adafruit5x7);
+}
+
+// The duration being edited. The field being edited blinks; the others stay on.
+void drawEditTime() {
+  const uint16_t total = presetDurationMinutes[timeChoice];
+  drawTimeFields(total, editField != 0 || blinkVisible,
+                 editField != 1 || blinkVisible, editField != 2 || blinkVisible);
+}
+
+// Up/down change the field being edited: hours by one (0 to 72), tens of
+// minutes by one (0 to 5, wrapping) and units by one (0 to 9, wrapping), so a
+// duration can be set to the minute. The total never goes over 72 hours.
+void adjustTimeField(uint16_t &totalMinutes, int8_t direction) {
+  int hours = totalMinutes / 60;
+  int tens = (totalMinutes % 60) / 10;
+  int units = totalMinutes % 10;
+  if (editField == 0) {
+    hours += direction;
+    if (hours < 0) hours = 0;
+    if (hours > MAX_DURATION_MINUTES / 60) hours = MAX_DURATION_MINUTES / 60;
+  } else if (editField == 1) {
+    tens = (tens + direction + 6) % 6;
+  } else {
+    units = (units + direction + 10) % 10;
+  }
+  int minutes = tens * 10 + units;
+  if (hours * 60 + minutes > MAX_DURATION_MINUTES) minutes = 0;
+  totalMinutes = hours * 60 + minutes;
+}
+
+// Blinks the field being edited, like a clock in setting mode. Only the time
 // area is redrawn, so the rest of the screen stays still.
 void updateBlink(uint32_t now) {
-  if (!displayAvailable || displayMode != DISPLAY_AWAKE || screen != TIME_EDIT) return;
+  if (!displayAvailable || displayMode != DISPLAY_AWAKE ||
+      (screen != TIME_EDIT && screen != EDIT_PRESET_DURATION)) return;
   if (now - lastBlinkMs < BLINK_MS) return;
   lastBlinkMs = now;
   blinkVisible = !blinkVisible;
-  if (blinkVisible) drawMinutesText(presetDurationMinutes[timeChoice]);
-  else display.clear(TIME_COL, SCREEN_WIDTH - 1, TIME_ROW, TIME_ROW + 2);
+  drawEditTime();
 }
 
-// Dimmed view while fermenting: only the time left, centred.
-void drawDimTime() {
-  char text[10];
-  formatClock(remainingMs, text, sizeof(text));
+// Low-power view: the display stays on at the lowest contrast, showing one
+// thing per screen, and a small mark flashes now and then to show it is on.
+// Big text centred in the screen (used by the low-power views).
+void drawDimText(const char *text) {
   display.clear();
   display.setFont(Verdana_digits_24);
   display.set1X();
@@ -922,40 +990,82 @@ void drawDimTime() {
   display.setCursor((SCREEN_WIDTH - width) / 2, 2);
   display.print(text);
   display.setFont(Adafruit5x7);
+}
+
+// A word centred in the screen, in the current language.
+void drawDimWord(const __FlashStringHelper *english, const __FlashStringHelper *spanish) {
+  display.clear();
+  drawWord(3, english, spanish);
+}
+
+// The low-power view for the screen that is showing.
+void drawDimView() {
+  heartbeatOn = false;
+  heartbeatChangeMs = millis();
+  char text[10];
+  switch (screen) {
+    case RUNNING_SCREEN:
+      formatClock(remainingMs, text, sizeof(text));
+      drawDimText(text);
+      break;
+    case DONE:
+      display.clear();
+      drawSpriteAt(48, 16, FACE_DONE);
+      break;
+    case HOME:
+      if (homeSelection == HOME_TEST_SELECTION) {
+        formatClock(MECHANISM_TEST_FERMENTATION_MS, text, sizeof(text));
+        drawDimText(text);
+      } else if (homeSelection == HOME_MENU_SELECTION) {
+        drawDimWord(F("MENU"), F("MENU"));
+      } else {
+        formatMinuteDuration(static_cast<uint32_t>(presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION]) * 60000UL,
+                             text, sizeof(text));
+        drawDimText(text);
+      }
+      break;
+    case ADVANCED_MENU: drawDimWord(F("OPTIONS"), F("OPCIONES")); break;
+    case TIME_PICK:
+    case TIME_EDIT:
+    case EDIT_PRESET_DURATION: drawDimWord(F("TIME"), F("HORA")); break;
+    case SETTINGS: drawDimWord(F("SERVO"), F("SERVO")); break;
+    case EDIT_HOME_ANGLE: drawDimWord(F("CLOSED"), F("CERRADO")); break;
+    case EDIT_RELEASE_ANGLE: drawDimWord(F("OPEN"), F("ABIERTO")); break;
+    case EDIT_RELEASE_TIME: drawDimWord(F("HOLD S"), F("PAUSA S")); break;
+    case LANGUAGE_PICK: drawDimWord(F("LANGUAGE"), F("LANGUAGE")); break;
+    case NO_TIME: drawDimWord(F("NO TIME"), F("SIN TIEMPO")); break;
+  }
   lastDimTick = displayTickOf(remainingMs);
 }
 
-// Dimmed "finished" view: the word DONE / LISTO, nothing else.
-void drawDimDone() {
-  display.clear();
-  drawSpriteAt(48, 16, FACE_DONE);
+// While fermenting, the dimmed time is redrawn once its value changes.
+void updateDimTime() {
+  if (screen != RUNNING_SCREEN) return;
+  if (displayTickOf(remainingMs) != lastDimTick) drawDimView();
 }
 
-// Redraws the dimmed time when the displayed value changes.
-void updateDimTime() {
-  if (screen == DONE) return;
-  if (displayTickOf(remainingMs) != lastDimTick) {
-    drawDimTime();
+// Flashes a small mark in the bottom-right corner every HEARTBEAT_MS.
+void updateHeartbeat(uint32_t now) {
+  if (displayMode != DISPLAY_DIM) return;
+  if (!heartbeatOn && now - heartbeatChangeMs >= HEARTBEAT_MS) {
+    display.setCursor(120, 7);
+    for (byte i = 0; i < 4; ++i) display.ssd1306WriteRam(0x18);
+    heartbeatOn = true;
+    heartbeatChangeMs = now;
+  } else if (heartbeatOn && now - heartbeatChangeMs >= HEARTBEAT_ON_MS) {
+    display.clear(120, 123, 7, 7);
+    heartbeatOn = false;
+    heartbeatChangeMs = now;
   }
 }
 
-// Dims to the lowest contrast: the time left while fermenting, or DONE after a
-// finished cycle.
+// Dims to the lowest contrast and shows the low-power view of this screen.
 void enterDim() {
   stopAnimation();
   displayMode = DISPLAY_DIM;
   sleepScreen = screen;
   display.setContrast(CONTRAST_DIM);
-  if (screen == DONE) drawDimDone();
-  else drawDimTime();
-}
-
-// Turns the panel off (idle screens have nothing worth showing in the dark).
-void sleepDisplay() {
-  stopAnimation();
-  displayMode = DISPLAY_OFF;
-  sleepScreen = screen;
-  display.ssd1306WriteCmd(CMD_DISPLAY_OFF);
+  drawDimView();
 }
 
 // Full brightness and full screen. The redraw is forced on the next loop().
@@ -963,7 +1073,6 @@ void wakeDisplay() {
   displayMode = DISPLAY_AWAKE;
   lastActivityMs = millis();
   display.setContrast(CONTRAST_FULL);
-  display.ssd1306WriteCmd(CMD_DISPLAY_ON);
   lastRenderedScreen = static_cast<Screen>(255);
 }
 
@@ -1509,6 +1618,9 @@ void handleButtons() {
     // Holding select on a preset opens its editor; a short press starts it.
     if (buttonSelect.longPressed() && homeSelection >= HOME_FIRST_PRESET_SELECTION &&
         homeSelection < HOME_MENU_SELECTION) {
+      // Same field editor as the options menu, for the preset under the cursor.
+      timeChoice = homeSelection - HOME_FIRST_PRESET_SELECTION;
+      editField = 0;
       screen = EDIT_PRESET_DURATION;
     } else if (buttonSelect.shortReleased()) {
       if (homeSelection == HOME_TEST_SELECTION) startMechanismTest();
@@ -1516,18 +1628,6 @@ void handleButtons() {
         advancedSelection = MENU_TIME;
         screen = ADVANCED_MENU;
       } else startPresetFermentation();
-    }
-    return;
-  }
-  if (screen == EDIT_PRESET_DURATION) {
-    uint16_t &selectedDuration = presetDurationMinutes[homeSelection - HOME_FIRST_PRESET_SELECTION];
-    if (buttonUp.pressed() && selectedDuration + 60 <= MAX_DURATION_MINUTES) selectedDuration += 60;
-    if (buttonDown.pressed() && selectedDuration > MIN_DURATION_MINUTES) {
-      selectedDuration = selectedDuration >= 60 ? selectedDuration - 60 : 0;
-    }
-    if (buttonSelect.shortReleased()) {
-      savePresetData();
-      screen = HOME;
     }
     return;
   }
@@ -1553,22 +1653,37 @@ void handleButtons() {
     if (buttonUp.pressed() && timeChoice > 0) --timeChoice;
     if (buttonDown.pressed() && timeChoice < PRESET_COUNT) ++timeChoice;
     if (buttonSelect.shortReleased()) {
-      if (timeChoice < PRESET_COUNT) screen = TIME_EDIT;
-      else screen = ADVANCED_MENU;
+      if (timeChoice < PRESET_COUNT) {
+        editField = 0;
+        screen = TIME_EDIT;
+      } else screen = ADVANCED_MENU;
     }
     return;
   }
-  if (screen == TIME_EDIT) {
-    // The time blinks. Up/down change it; OK saves it and returns to the list.
-    // Nothing starts.
-    uint16_t &minutes = presetDurationMinutes[timeChoice];
-    if (buttonUp.pressed() && minutes + 30 <= MAX_DURATION_MINUTES) minutes += 30;
-    if (buttonDown.pressed() && minutes > MIN_DURATION_MINUTES) {
-      minutes = minutes >= 30 ? minutes - 30 : 0;
+  if (screen == TIME_EDIT || screen == EDIT_PRESET_DURATION) {
+    // OK moves on: hours, then tens and units of the minutes (the field that
+    // was blinking stops). The last OK saves and returns to the list. Nothing
+    // starts.
+    uint16_t &total = presetDurationMinutes[timeChoice];
+    const bool up = buttonUp.pressed() || buttonUp.repeated();
+    const bool down = buttonDown.pressed() || buttonDown.repeated();
+    if (up) adjustTimeField(total, 1);
+    if (down) adjustTimeField(total, -1);
+    if (up || down) {
+      blinkVisible = true;
+      lastBlinkMs = millis();
+      drawEditTime();
     }
     if (buttonSelect.shortReleased()) {
-      savePresetData();
-      screen = TIME_PICK;
+      if (editField < 2) {
+        ++editField;
+        blinkVisible = true;
+        lastBlinkMs = millis();
+        drawEditTime();
+      } else {
+        savePresetData();
+        screen = screen == TIME_EDIT ? TIME_PICK : HOME;
+      }
     }
     return;
   }
@@ -1709,8 +1824,7 @@ void loop() {
   }
   if (displayAvailable && displayMode == DISPLAY_AWAKE && !releaseInProgress &&
       releaseNow - lastActivityMs >= IDLE_TIMEOUT_MS) {
-    if (screen == RUNNING_SCREEN || screen == DONE) enterDim();
-    else sleepDisplay();
+    enterDim();
   }
   if (displayMode == DISPLAY_AWAKE) {
     if (needsFullRedraw()) {
@@ -1723,5 +1837,6 @@ void loop() {
     runAnimation(now);
   } else if (displayMode == DISPLAY_DIM) {
     updateDimTime();
+    updateHeartbeat(now);
   }
 }

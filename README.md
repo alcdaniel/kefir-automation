@@ -116,10 +116,10 @@ The first time the lid starts, it asks for the language: press **up or down** to
 
 - **Up / down**: move through **TEST** (5 s), **QUICK** (12 h), **NORMAL** (24 h), **LONG** (36 h) and **MENU**.
 - **Select**: starts the option on screen; on **MENU** it opens the options. Buttons act when released, so a press never triggers a second action on the next screen. The 5-second test runs the full release cycle so you can check the mechanism.
-- **Hold select for 1.5 s** on a preset: edit its duration in one-hour steps; select saves it.
+- **Hold select for 1.5 s** on a preset: edit its duration with the same blinking editor as in MENU → TIME (hours, then tens and units of the minutes, so any length down to one minute). Select saves it and returns to the home screen.
 - **Hold up or down for 1.5 s** (from anywhere on the home screen): also opens **MENU**.
 - **MENU** (options):
-  - `TIME`: lists **QUICK**, **NORMAL** and **LONG** with their times (up/down to choose, **EXIT** to go back). Select on a preset starts editing it: the time **blinks** to show you are in edit mode, up/down change it in 30-minute steps, and select saves it and returns to the list. Nothing starts.
+  - `TIME`: lists **QUICK**, **NORMAL** and **LONG** with their times (up/down to choose, **EXIT** to go back). Select on a preset starts editing it. The time fills the screen and the field being edited **blinks**: first the **hours**, then the **tens** and the **units** of the minutes, so you can set any duration down to one minute. Up/down change the blinking field (hours by 1, tens 0-5, units 0-9). Hold up or down and the number keeps changing quickly, so you do not have to press it again and again. Each select moves on to the next field; the last select saves and returns to the list. Nothing starts.
   - `SERVO`: sets the **CLOSED** angle, the **OPEN** angle and how many seconds it stays open (**HOLD**).
   - `LANGUAGE`: switches between English and Spanish. The footer shows the language it will switch to.
   - `EXIT`: back to the home screen.
@@ -139,16 +139,16 @@ The menus are not animated, so they respond straight away.
 
 ## Power saving
 
-After 30 seconds without touching a button (or sending a serial command):
+After 30 seconds without touching a button (or sending a serial command) the screen drops to its lowest brightness and shows one thing, depending on where you are:
 
-- **While fermenting**: the screen dims to its lowest brightness and shows only the time left.
-- **Otherwise**: the screen turns off.
+- **Fermenting**: the time left.
+- **Home screen**: the time of the preset you are on (or the test, or the word MENU).
+- **Options, time, servo, language**: the name of that screen (for example OPTIONS or SERVO).
+- **Finished**: just the grain.
+
+The screen is never completely blank: every 8 seconds a small mark flashes in the bottom-right corner, so you know the lid is on. Any button wakes it to full brightness; that press only wakes the screen and does not also act on what is shown. The screen also wakes by itself when the fermentation ends and the grains are released.
 
 The servo is also disconnected while the lid is closed, since it holds nothing there. It is connected only for the release (and while you calibrate the angles in SERVO), which saves power.
-
-Any button wakes it. That press only wakes the screen; it does not also act on what is shown. The screen also wakes by itself when the fermentation ends and the grains are released.
-
-The 12, 24 and 36-hour presets are starting points for cow's milk and active grains at room temperature: 12 h usually gives a milder kefir, 24 h is the usual rhythm and 36 h a stronger option.
 
 ## Using it without buttons: serial console
 
