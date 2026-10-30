@@ -13,7 +13,7 @@ Everything you need to build the automatic kefir jar lid, besides the 3D-printed
 | M3 and M2 screws | 2 × M3 + 1 × M2 | M3 for the servo, M2 for the release lock. Assortment kits cover every length. | [Amazon](https://www.amazon.com/s?k=M3%20M2%20screw%20assortment%20kit) · [AliExpress](https://www.aliexpress.com/w/wholesale-M3-M2-screw-assortment-kit.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=M3%20M2%20screw%20assortment%20kit) |
 | Jumper (Dupont) wires | 1 pack | Female-female and male-female. | [Amazon](https://www.amazon.com/s?k=dupont%20jumper%20wires) · [AliExpress](https://www.aliexpress.com/w/wholesale-dupont-jumper-wires.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=dupont%20jumper%20wires) |
 | Perfboard (optional) | 1 | Tidies up the soldered connections. | [Amazon](https://www.amazon.com/s?k=perfboard%20prototype%20pcb) · [AliExpress](https://www.aliexpress.com/w/wholesale-perfboard-prototype-pcb.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=perfboard%20prototype%20pcb) |
-| Glass jar with TO 82 screw top | 1 | The printed lid replaces the original one. | [Amazon](https://www.amazon.com/s?k=TO%2082%20glass%20jar) · [AliExpress](https://www.aliexpress.com/w/wholesale-TO-82-glass-jar.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=TO%2082%20glass%20jar) |
+| Glass jar with TO 77 screw top | 1 | The printed lid replaces the original one. | [Amazon](https://www.amazon.com/s?k=TO%2082%20glass%20jar) · [AliExpress](https://www.aliexpress.com/w/wholesale-TO-82-glass-jar.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=TO%2082%20glass%20jar) |
 | 5 V USB power supply (≥ 1 A) and USB cable | 1 | Classic Nanos use Mini-USB; some clones use USB-C. A second 5 V supply for the servo is recommended. | [Amazon](https://www.amazon.com/s?k=5V%202A%20USB%20power%20supply) · [AliExpress](https://www.aliexpress.com/w/wholesale-5V-2A-USB-power-supply.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=5V%202A%20USB%20power%20supply) |
 | 470–1000 µF capacitor (optional) | 1 | Between servo 5 V and GND to absorb current peaks. | [Amazon](https://www.amazon.com/s?k=1000uF%2016V%20electrolytic%20capacitor) · [AliExpress](https://www.aliexpress.com/w/wholesale-1000uF-16V-electrolytic-capacitor.html) · [eBay](https://www.ebay.com/sch/i.html?_nkw=1000uF%2016V%20electrolytic%20capacitor) |
 
@@ -21,7 +21,7 @@ Everything you need to build the automatic kefir jar lid, besides the 3D-printed
 
 | Part | Qty | Notes |
 | --- | --- | --- |
-| Lid with TO 82 thread and mounts | 1 | Holds the OLED, buttons, servo, Nano and plunger. |
+| Lid with TO 77 thread and mounts | 1 | Holds the OLED, buttons, servo, Nano and plunger. |
 | Plunger, 15 cm or 20 cm | 1 | Print only the one that fits your jar height. |
 | Release clamp | 1 | Part of the servo release latch. |
 

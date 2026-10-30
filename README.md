@@ -57,7 +57,7 @@ See **[BOM.md](BOM.md)** for the full list with purchase links (Arduino Store, A
 - Compression spring, **8 mm diameter and about 10 cm** long, to raise the plunger.
 - Spring of about **3 mm diameter and 5 cm**, cut to size, for the release latch.
 - 2 **M3** screws (servo) and 1 **M2** screw (release lock).
-- A glass jar with a **TO 82** screw top.
+- A glass jar with a **TO 77** screw top.
 
 ## Wiring
 

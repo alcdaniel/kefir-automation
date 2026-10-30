@@ -6,3 +6,6 @@
 
 # Arduino build output
 build/
+
+# Instagram marketing videos (local only)
+videos-instagram/
